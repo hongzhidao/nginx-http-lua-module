@@ -48,8 +48,6 @@ http {
 }
 ```
 
-```
-
 Community
 =========
-Author: 洪志道<hongzhidao@gmail.com>
+Author: Zhidao HONG <hongzhidao@gmail.com>
