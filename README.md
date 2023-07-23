@@ -44,10 +44,14 @@ http {
         location /hello {
             lua_script  "r.echo('hello lua')";
         }
+
+        location /status {
+            lua_script  "r.echo(r.uri)";
+        }
     }
 }
 ```
 
 Community
 =========
-Author: Zhidao HONG <hongzhidao@gmail.com>
+Author: Zhidao HONG<hongzhidao@gmail.com>
