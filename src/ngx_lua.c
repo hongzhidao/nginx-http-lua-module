@@ -14,7 +14,7 @@ static void ngx_lua_state_cleanup(void *data);
 static void ngx_lua_thread_cleanup(void *data);
 
 ngx_lua_t *
-ngx_lua_create(ngx_conf_t *cf, ngx_str_t *script)
+ngx_lua_create(ngx_conf_t *cf)
 {
     ngx_lua_t           *lua;
     ngx_pool_cleanup_t  *cln;
@@ -72,8 +72,6 @@ ngx_lua_clone(ngx_pool_t *pool, ngx_lua_t *from)
 
     lua->ref = luaL_ref(from->state, LUA_REGISTRYINDEX);
 
-    lua_rawgeti(lua->state, LUA_REGISTRYINDEX, from->ref);
-
     ngx_lua_ext_set(lua->state, lua);
 
     cln = ngx_pool_cleanup_add(pool, sizeof(ngx_lua_cleanup_t));
@@ -102,9 +100,11 @@ ngx_lua_thread_cleanup(void *data)
 
 
 ngx_int_t
-ngx_lua_call(ngx_lua_t *lua, ngx_log_t *log)
+ngx_lua_call(ngx_lua_t *lua, int ref, ngx_log_t *log)
 {
     int  status, nresults;
+
+    lua_rawgeti(lua->state, LUA_REGISTRYINDEX, ref);
 
     status = lua_resume(lua->state, NULL, 0, &nresults);
     if (status != LUA_OK && status != LUA_YIELD) {

@@ -8,9 +8,14 @@
 
 typedef struct {
     ngx_lua_t       *lua;
-} ngx_http_lua_conf_t;
+} ngx_http_lua_main_conf_t;
+
+typedef struct {
+    int             lua_ref;
+} ngx_http_lua_loc_conf_t;
 
 static ngx_int_t ngx_http_lua_init(ngx_conf_t *cf);
+static void *ngx_http_lua_create_main_conf(ngx_conf_t *cf);
 static void *ngx_http_lua_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_lua_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
@@ -35,7 +40,7 @@ static ngx_http_module_t  ngx_http_lua_module_ctx = {
     NULL,                          /* preconfiguration */
     ngx_http_lua_init,             /* postconfiguration */
 
-    NULL,                          /* create main configuration */
+    ngx_http_lua_create_main_conf, /* create main configuration */
     NULL,                          /* init main configuration */
 
     NULL,                          /* create server configuration */
@@ -67,26 +72,28 @@ ngx_http_lua_handler(ngx_http_request_t *r)
 {
     ngx_int_t                 ret;
     ngx_lua_t                 *lua;
-    ngx_http_lua_conf_t       *lcf;
+    ngx_http_lua_loc_conf_t   *llcf;
+    ngx_http_lua_main_conf_t  *lmcf;
     ngx_http_complex_value_t  cv;
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "http lua handler");
 
-    lcf = ngx_http_get_module_loc_conf(r, ngx_http_lua_module);
+    lmcf = ngx_http_get_module_main_conf(r, ngx_http_lua_module);
+    llcf = ngx_http_get_module_loc_conf(r, ngx_http_lua_module);
 
-    if (lcf->lua == NULL) {
+    if (llcf->lua_ref == 0) {
         return NGX_DECLINED;
     }
 
-    lua = ngx_lua_clone(r->pool, lcf->lua);
+    lua = ngx_lua_clone(r->pool, lmcf->lua);
     if (lua == NULL) {
         return NGX_ERROR;
     }
 
     lua->data = r;
 
-    ret = ngx_lua_call(lua, r->connection->log);
+    ret = ngx_lua_call(lua, llcf->lua_ref, r->connection->log);
     if (ret != NGX_OK) {
         return NGX_ERROR;
     }
@@ -108,11 +115,35 @@ ngx_http_lua_handler(ngx_http_request_t *r)
 
 
 static void *
+ngx_http_lua_create_main_conf(ngx_conf_t *cf)
+{
+    ngx_lua_t                 *lua;
+    ngx_http_lua_main_conf_t  *lmcf;
+
+    lmcf = ngx_pcalloc(cf->pool, sizeof(ngx_http_lua_main_conf_t));
+    if (lmcf == NULL) {
+        return NULL;
+    }
+
+    lua = ngx_lua_create(cf);
+    if (lua == NULL) {
+        return NULL;
+    }
+
+    ngx_lua_http_register(lua->state);
+
+    lmcf->lua = lua;
+
+    return lmcf;
+}
+
+
+static void *
 ngx_http_lua_create_loc_conf(ngx_conf_t *cf)
 {
-    ngx_http_lua_conf_t  *conf;
+    ngx_http_lua_loc_conf_t  *conf;
 
-    conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_lua_conf_t));
+    conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_lua_loc_conf_t));
     if (conf == NULL) {
         return NULL;
     }
@@ -120,7 +151,7 @@ ngx_http_lua_create_loc_conf(ngx_conf_t *cf)
     /*
      * set by ngx_pcalloc():
      *
-     *     conf->lua = NULL;
+     *     conf->lua_ref = 0;
      */
 
     return conf;
@@ -130,11 +161,11 @@ ngx_http_lua_create_loc_conf(ngx_conf_t *cf)
 static char *
 ngx_http_lua_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 {
-    ngx_http_lua_conf_t  *prev = parent;
-    ngx_http_lua_conf_t  *conf = child;
+    ngx_http_lua_loc_conf_t  *prev = parent;
+    ngx_http_lua_loc_conf_t  *conf = child;
 
-    if (conf->lua == NULL) {
-        conf->lua = prev->lua;
+    if (conf->lua_ref == 0) {
+        conf->lua_ref = prev->lua_ref;
     }
 
     return NGX_CONF_OK;
@@ -144,26 +175,22 @@ ngx_http_lua_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 static char *
 ngx_http_lua_script(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
-    ngx_http_lua_conf_t *lcf = conf;
+    ngx_http_lua_loc_conf_t *llcf = conf;
 
-    int        ret;
-    ngx_str_t  *value;
-    ngx_lua_t  *lua;
+    int                       ret;
+    ngx_str_t                 *value;
+    ngx_lua_t                 *lua;
+    ngx_http_lua_main_conf_t  *lmcf;
 
-    if (lcf->lua != NULL) {
+    if (llcf->lua_ref != 0) {
         return "is duplicate";
     }
 
+    lmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_lua_module);
+
+    lua = lmcf->lua;
+
     value = cf->args->elts;
-
-    lua = ngx_lua_create(cf, &value[1]);
-    if (lua == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    lcf->lua = lua;
-
-    ngx_lua_http_register(lua->state);
 
     ret = luaL_loadstring(lua->state, (const char *) value[1].data);
 
@@ -172,7 +199,7 @@ ngx_http_lua_script(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         return NGX_CONF_ERROR;
     }
 
-    lua->ref = luaL_ref(lua->state, LUA_REGISTRYINDEX);
+    llcf->lua_ref = luaL_ref(lua->state, LUA_REGISTRYINDEX);
 
     return NGX_CONF_OK;
 }
