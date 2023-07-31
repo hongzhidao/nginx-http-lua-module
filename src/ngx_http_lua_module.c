@@ -98,8 +98,17 @@ ngx_http_lua_handler(ngx_http_request_t *r)
         return NGX_ERROR;
     }
 
-    if (lua->status > 0) {
+    if (lua->status > 0 || lua->buf != NULL) {
         ngx_memzero(&cv, sizeof(ngx_http_complex_value_t));
+
+        if (lua->status == 0) {
+            lua->status = NGX_HTTP_OK;
+        }
+
+        if (lua->buf != NULL) {
+            cv.value.data = lua->buf->pos;
+            cv.value.len = ngx_buf_size(lua->buf);
+        }
 
         ret = ngx_http_send_response(r, lua->status, NULL, &cv);
         if (ret == NGX_ERROR) {

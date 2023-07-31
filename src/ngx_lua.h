@@ -16,6 +16,7 @@ typedef struct {
     lua_State       *state;
     int             ref;
     void            *data;
+    ngx_buf_t       *buf;
     int             status;
 } ngx_lua_t;
 
