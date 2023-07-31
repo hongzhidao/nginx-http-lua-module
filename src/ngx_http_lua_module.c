@@ -65,9 +65,10 @@ ngx_module_t  ngx_http_lua_module = {
 static ngx_int_t
 ngx_http_lua_handler(ngx_http_request_t *r)
 {
-    ngx_int_t            rc;
-    ngx_lua_t            *lua;
-    ngx_http_lua_conf_t  *lcf;
+    ngx_int_t                 ret;
+    ngx_lua_t                 *lua;
+    ngx_http_lua_conf_t       *lcf;
+    ngx_http_complex_value_t  cv;
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "http lua handler");
@@ -85,13 +86,21 @@ ngx_http_lua_handler(ngx_http_request_t *r)
 
     lua->data = r;
 
-    rc = ngx_lua_call(lua, r->connection->log);
-    if (rc != NGX_OK) {
+    ret = ngx_lua_call(lua, r->connection->log);
+    if (ret != NGX_OK) {
         return NGX_ERROR;
     }
 
     if (lua->status > 0) {
-        return lua->status;
+        ngx_memzero(&cv, sizeof(ngx_http_complex_value_t));
+
+        ret = ngx_http_send_response(r, lua->status, NULL, &cv);
+        if (ret == NGX_ERROR) {
+            return NGX_ERROR;
+        }
+
+        ngx_http_finalize_request(r, ret);
+        return NGX_DONE;
     }
 
     return NGX_OK;
