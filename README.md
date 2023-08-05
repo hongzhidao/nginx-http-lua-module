@@ -21,7 +21,8 @@ Directives
 
 request object
 ====
-- ``r.uri`` the client HTTP request uri, readonly.
+- ``r.uri``
+- ``r.body``
 - ``r.echo(text)``
 - ``r.exit(status)``
 

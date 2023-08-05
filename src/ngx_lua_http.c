@@ -7,6 +7,7 @@
 
 static int ngx_lua_http_index(lua_State *L);
 static int ngx_lua_http_uri(lua_State *L);
+static int ngx_lua_http_body(lua_State *L);
 static int ngx_lua_http_echo(lua_State *L);
 static int ngx_lua_http_exit(lua_State *L);
 
@@ -19,6 +20,9 @@ ngx_lua_http_register(lua_State *L)
 
     lua_pushcfunction(L, ngx_lua_http_uri);
     lua_setfield(L, -2, "uri");
+
+    lua_pushcfunction(L, ngx_lua_http_body);
+    lua_setfield(L, -2, "body");
 
     lua_setglobal(L, "http_property");
     /* } http property */
@@ -97,6 +101,66 @@ ngx_lua_http_uri(lua_State *L)
     r = ngx_lua_http_request(L);
 
     lua_pushlstring(L, (const char *) r->uri.data, r->uri.len);
+
+    return 1;
+}
+
+
+static int
+ngx_lua_http_body(lua_State *L)
+{
+    u_char              *p;
+    size_t              len;
+    ngx_buf_t           *buf;
+    ngx_str_t           str;
+    ngx_chain_t         *cl;
+    ngx_http_request_t  *r;
+
+    r = ngx_lua_http_request(L);
+
+    if (r->request_body == NULL
+        || r->request_body->bufs == NULL
+        || r->request_body->temp_file)
+    {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    cl = r->request_body->bufs;
+    buf = cl->buf;
+
+    if (cl->next == NULL) {
+        str.data = buf->pos;
+        str.len = buf->last - buf->pos;
+
+        lua_pushlstring(L, (const char *) str.data, str.len);
+        return 1;
+    }
+
+    len = buf->last - buf->pos;
+    cl = cl->next;
+
+    for ( /* void */ ; cl; cl = cl->next) {
+        buf = cl->buf;
+        len += buf->last - buf->pos;
+    }
+
+    p = ngx_pnalloc(r->pool, len);
+    if (p == NULL) {
+        return luaL_error(L, "get request body failed");
+    }
+
+    str.data = p;
+    str.len = len;
+
+    cl = r->request_body->bufs;
+
+    for ( /* void */ ; cl; cl = cl->next) {
+        buf = cl->buf;
+        p = ngx_cpymem(p, buf->pos, buf->last - buf->pos);
+    }
+
+    lua_pushlstring(L, (const char *) str.data, str.len);
 
     return 1;
 }
