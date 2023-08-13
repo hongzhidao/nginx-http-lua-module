@@ -3,8 +3,7 @@
  * Copyright (C) Zhidao HONG
  */
 
-#include <ngx_lua.h>
-#include <ngx_http.h>
+#include <ngx_lua_http.h>
 
 typedef struct {
     ngx_lua_t       *lua;

@@ -30,6 +30,4 @@ ngx_int_t ngx_lua_call(ngx_lua_t *lua, int ref, ngx_log_t *log);
 #define ngx_lua_ext_get(L)                                          \
     (*((void **) lua_getextraspace(L)))
 
-#include <ngx_lua_http.h>
-
 #endif /* NGX_LUA_H */

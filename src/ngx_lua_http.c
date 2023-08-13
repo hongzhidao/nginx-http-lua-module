@@ -3,7 +3,7 @@
  * Copyright (C) Zhidao HONG
  */
 
-#include <ngx_lua.h>
+#include <ngx_lua_http.h>
 
 static int ngx_lua_http_index(lua_State *L);
 static int ngx_lua_http_uri(lua_State *L);
@@ -109,11 +109,9 @@ ngx_lua_http_uri(lua_State *L)
 static int
 ngx_lua_http_body(lua_State *L)
 {
-    u_char              *p;
-    size_t              len;
     ngx_buf_t           *buf;
-    ngx_str_t           str;
     ngx_chain_t         *cl;
+    luaL_Buffer         b;
     ngx_http_request_t  *r;
 
     r = ngx_lua_http_request(L);
@@ -126,41 +124,17 @@ ngx_lua_http_body(lua_State *L)
         return 1;
     }
 
-    cl = r->request_body->bufs;
-    buf = cl->buf;
-
-    if (cl->next == NULL) {
-        str.data = buf->pos;
-        str.len = buf->last - buf->pos;
-
-        lua_pushlstring(L, (const char *) str.data, str.len);
-        return 1;
-    }
-
-    len = buf->last - buf->pos;
-    cl = cl->next;
-
-    for ( /* void */ ; cl; cl = cl->next) {
-        buf = cl->buf;
-        len += buf->last - buf->pos;
-    }
-
-    p = ngx_pnalloc(r->pool, len);
-    if (p == NULL) {
-        return luaL_error(L, "get request body failed");
-    }
-
-    str.data = p;
-    str.len = len;
+    luaL_buffinit(L, &b);
 
     cl = r->request_body->bufs;
 
-    for ( /* void */ ; cl; cl = cl->next) {
+    while (cl) {
         buf = cl->buf;
-        p = ngx_cpymem(p, buf->pos, buf->last - buf->pos);
+        luaL_addlstring(&b, (char *) buf->pos, buf->last - buf->pos);
+        cl = cl->next;
     }
 
-    lua_pushlstring(L, (const char *) str.data, str.len);
+    luaL_pushresult(&b);
 
     return 1;
 }
