@@ -5,49 +5,66 @@
 
 #include <ngx_lua_http.h>
 
-static int ngx_lua_http_index(lua_State *L);
-static int ngx_lua_http_uri(lua_State *L);
-static int ngx_lua_http_body(lua_State *L);
 static int ngx_lua_http_echo(lua_State *L);
 static int ngx_lua_http_exit(lua_State *L);
+static int ngx_lua_http_prototype(lua_State *L);
+static int ngx_lua_http_uri(lua_State *L);
+static int ngx_lua_http_body(lua_State *L);
 
 
-void
-ngx_lua_http_register(lua_State *L)
+int
+ngx_lua_http_object_ref(lua_State *L)
 {
-    /* http property { */
-    lua_createtable(L, 0, 4);
+    /*
+     * m = {};
+     * m.__index = m;
+     * m.methods;
+     * m.prototype = {};
+     * m.prototype.__index;
+     * m.prototype.__newindex;
+     * m.prototype.properties;
+     * setmetatable(m, m.prototype);
+    */
+    lua_newtable(L);
+
+    /* m.__index = m */
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "__index");
+
+    /* http methods { */
+    lua_pushcfunction(L, ngx_lua_http_echo);
+    lua_setfield(L, -2, "echo");
+
+    lua_pushcfunction(L, ngx_lua_http_exit);
+    lua_setfield(L, -2, "exit");
+    /* } http methods */
+
+    /* http prototype { */
+    lua_newtable(L);
+
+    /* prototype.__index */
+    lua_pushcfunction(L, ngx_lua_http_prototype);
+    lua_setfield(L, -2, "__index");
+
+    /* prototype.__newindex */
+    lua_pushcfunction(L, ngx_lua_http_prototype);
+    lua_setfield(L, -2, "__newindex");
 
     lua_pushcfunction(L, ngx_lua_http_uri);
     lua_setfield(L, -2, "uri");
 
     lua_pushcfunction(L, ngx_lua_http_body);
     lua_setfield(L, -2, "body");
+    /* } http prototype */
 
-    lua_setglobal(L, "http_property");
-    /* } http property */
+    /* m.prototype = prototype */
+    lua_setfield(L, -2, "prototype");
 
-    lua_createtable(L, 0, 10);
-
-    lua_pushcfunction(L, ngx_lua_http_echo);
-    lua_setfield(L, -2, "echo");
-
-    lua_pushcfunction(L, ngx_lua_http_exit);
-    lua_setfield(L, -2, "exit");
-
-    /* setmetatable { */
-    lua_createtable(L, 0, 4);
-
-    lua_pushcfunction(L, ngx_lua_http_index);
-    lua_setfield(L, -2, "__index");
-
-    lua_pushcfunction(L, ngx_lua_http_index);
-    lua_setfield(L, -2, "__newindex");
-
+    /* setmetatable(m, m.prototype) */
+    lua_getfield(L, -1, "prototype");
     lua_setmetatable(L, -2);
-    /* } setmetatable */
 
-    lua_setglobal(L, "r");
+    return luaL_ref(L, LUA_REGISTRYINDEX);
 }
 
 
@@ -63,7 +80,55 @@ ngx_lua_http_request(lua_State *L)
 
 
 static int
-ngx_lua_http_index(lua_State *L)
+ngx_lua_http_echo(lua_State *L)
+{
+    ngx_buf_t           *b;
+    ngx_str_t           str;
+    ngx_lua_t           *lua;
+    ngx_http_request_t  *r;
+
+    lua = ngx_lua_ext_get(L);
+    r = ngx_lua_http_request(L);
+
+    str.data = (u_char *) luaL_checklstring(L, 1, &str.len);
+
+    b = ngx_create_temp_buf(r->pool, str.len);
+    if (b == NULL) {
+        return luaL_error(L, "echo() failed");
+    }
+
+    b->last = ngx_cpymem(b->last, str.data, str.len);
+
+    lua->buf = b;
+
+    return 0;
+}
+
+
+static int
+ngx_lua_http_exit(lua_State *L)
+{
+    int        status;
+    ngx_lua_t  *lua;
+
+    lua = ngx_lua_ext_get(L);
+
+    status = luaL_checkinteger(L, 1);
+
+    if (status < 0 || status > 999) {
+        return luaL_error(L, "code is out of range");
+    }
+
+    lua->status = status;
+
+    lua_yield(L, 0);
+
+    return 0;
+}
+
+
+static int
+ngx_lua_http_prototype(lua_State *L)
 {
     int        n;
     ngx_str_t  name;
@@ -72,8 +137,7 @@ ngx_lua_http_index(lua_State *L)
 
     name.data = (u_char *) luaL_checklstring(L, 2, &name.len);
 
-    lua_getglobal(L, "http_property");
-
+    lua_getfield(L, 1, "prototype");
     lua_getfield(L, -1, (const char *) name.data);
 
     if (!lua_isfunction(L, -1)) {
@@ -137,52 +201,4 @@ ngx_lua_http_body(lua_State *L)
     luaL_pushresult(&b);
 
     return 1;
-}
-
-
-static int
-ngx_lua_http_echo(lua_State *L)
-{
-    ngx_buf_t           *b;
-    ngx_str_t           str;
-    ngx_lua_t           *lua;
-    ngx_http_request_t  *r;
-
-    lua = ngx_lua_ext_get(L);
-    r = ngx_lua_http_request(L);
-
-    str.data = (u_char *) luaL_checklstring(L, 1, &str.len);
-
-    b = ngx_create_temp_buf(r->pool, str.len);
-    if (b == NULL) {
-        return luaL_error(L, "echo() failed");
-    }
-
-    b->last = ngx_cpymem(b->last, str.data, str.len);
-
-    lua->buf = b;
-
-    return 0;
-}
-
-
-static int
-ngx_lua_http_exit(lua_State *L)
-{
-    int        status;
-    ngx_lua_t  *lua;
-
-    lua = ngx_lua_ext_get(L);
-
-    status = luaL_checkinteger(L, 1);
-
-    if (status < 0 || status > 999) {
-        return luaL_error(L, "code is out of range");
-    }
-
-    lua->status = status;
-
-    lua_yield(L, 0);
-
-    return 0;
 }

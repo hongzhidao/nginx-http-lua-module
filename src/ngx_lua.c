@@ -100,15 +100,14 @@ ngx_lua_thread_cleanup(void *data)
 
 
 ngx_int_t
-ngx_lua_call(ngx_lua_t *lua, int ref, ngx_log_t *log)
+ngx_lua_call(ngx_lua_t *lua, int narg)
 {
     int  status, nresults;
 
-    lua_rawgeti(lua->state, LUA_REGISTRYINDEX, ref);
+    status = lua_resume(lua->state, NULL, narg, &nresults);
 
-    status = lua_resume(lua->state, NULL, 0, &nresults);
     if (status != LUA_OK && status != LUA_YIELD) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "lua exception: %s",
+        ngx_log_error(NGX_LOG_ERR, lua->log, 0, "lua exception: %s",
                       lua_tostring(lua->state, -1));
         return NGX_ERROR;
     }

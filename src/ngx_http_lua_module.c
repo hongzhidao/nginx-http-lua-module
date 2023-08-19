@@ -7,6 +7,7 @@
 
 typedef struct {
     ngx_lua_t       *lua;
+    int             request_ref;
 } ngx_http_lua_main_conf_t;
 
 typedef struct {
@@ -87,10 +88,14 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
     }
 
     lua->data = r;
+    lua->log = r->connection->log;
 
     ngx_http_set_ctx(r, lua, ngx_http_lua_module);
 
-    ret = ngx_lua_call(lua, llcf->lua_ref, r->connection->log);
+    lua_rawgeti(lua->state, LUA_REGISTRYINDEX, llcf->lua_ref);
+    lua_rawgeti(lua->state, LUA_REGISTRYINDEX, lmcf->request_ref);
+
+    ret = ngx_lua_call(lua, 1);
     if (ret != NGX_OK) {
         goto fail;
     }
@@ -175,9 +180,8 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
         return NULL;
     }
 
-    ngx_lua_http_register(lua->state);
-
     lmcf->lua = lua;
+    lmcf->request_ref = ngx_lua_http_object_ref(lua->state);
 
     return lmcf;
 }
@@ -217,13 +221,42 @@ ngx_http_lua_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 }
 
 
+static const char *
+ngx_http_lua_reader(lua_State *L, void *ud, size_t *size)
+{
+    u_char     *buffer;
+    ngx_str_t  *script;
+
+    static const ngx_str_t  prefix = ngx_string("local r = ...;");
+
+    script = ud;
+
+    if (script->len == 0) {
+        return NULL;
+    }
+
+    buffer = lua_newuserdata(L, prefix.len + script->len);
+    if (buffer == NULL) {
+        return NULL;
+    }
+
+    ngx_memcpy(buffer, prefix.data, prefix.len);
+    ngx_memcpy(buffer + prefix.len, script->data, script->len);
+
+    *size = prefix.len + script->len;
+    script->len = 0;
+
+    return (const char *) buffer;
+}
+
+
 static char *
 ngx_http_lua_script(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     ngx_http_lua_loc_conf_t *llcf = conf;
 
     int                       ret;
-    ngx_str_t                 *value;
+    ngx_str_t                 *value, script;
     ngx_lua_t                 *lua;
     ngx_http_lua_main_conf_t  *lmcf;
 
@@ -232,15 +265,15 @@ ngx_http_lua_script(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     lmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_lua_module);
-
     lua = lmcf->lua;
 
     value = cf->args->elts;
+    script = value[1];
 
-    ret = luaL_loadstring(lua->state, (const char *) value[1].data);
+    ret = lua_load(lua->state, ngx_http_lua_reader, &script, NULL, NULL);
 
     if (ret != LUA_OK) {
-        ngx_log_error(NGX_LOG_ERR, cf->log, 0, "luaL_loadfile() failed");
+        ngx_log_error(NGX_LOG_ERR, cf->log, 0, "lua_load() failed");
         return NGX_CONF_ERROR;
     }
 

@@ -9,6 +9,6 @@
 #include <ngx_lua.h>
 #include <ngx_http.h>
 
-void ngx_lua_http_register(lua_State *L);
+int ngx_lua_http_object_ref(lua_State *L);
 
 #endif /* NGX_LUA_HTTP_H */
