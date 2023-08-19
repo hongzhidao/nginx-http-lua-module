@@ -65,6 +65,8 @@ ngx_lua_clone(ngx_pool_t *pool, ngx_lua_t *from)
         return NULL;
     }
 
+    lua->pool = pool;
+
     lua->state = lua_newthread(from->state);
     if (lua->state == NULL) {
         return NULL;

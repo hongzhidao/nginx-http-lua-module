@@ -6,9 +6,11 @@ lua=$ngx_addon_dir/lua-5.4.6
 ngx_module_incs="$lua/src $ngx_addon_dir/src"
 ngx_module_libs="$lua/src/liblua.a -lm -ldl"
 ngx_module_deps="$lua/src/liblua.a \
+                 $ngx_addon_dir/src/ngx_chb.h \
                  $ngx_addon_dir/src/ngx_lua.h \
                  $ngx_addon_dir/src/ngx_lua_http.h"
-ngx_module_srcs="$ngx_addon_dir/src/ngx_lua.c \
+ngx_module_srcs="$ngx_addon_dir/src/ngx_chb.c \
+                 $ngx_addon_dir/src/ngx_lua.c \
                  $ngx_addon_dir/src/ngx_lua_http.c \
                  $ngx_addon_dir/src/ngx_http_lua_module.c"
 
