@@ -9,6 +9,8 @@ static int ngx_lua_http_echo(lua_State *L);
 static int ngx_lua_http_exit(lua_State *L);
 static int ngx_lua_http_prototype(lua_State *L);
 static int ngx_lua_http_uri(lua_State *L);
+static int ngx_lua_http_method(lua_State *L);
+static int ngx_lua_http_client_ip(lua_State *L);
 static int ngx_lua_http_body(lua_State *L);
 
 
@@ -52,6 +54,12 @@ ngx_lua_http_object_ref(lua_State *L)
 
     lua_pushcfunction(L, ngx_lua_http_uri);
     lua_setfield(L, -2, "uri");
+
+    lua_pushcfunction(L, ngx_lua_http_method);
+    lua_setfield(L, -2, "method");
+
+    lua_pushcfunction(L, ngx_lua_http_client_ip);
+    lua_setfield(L, -2, "client_ip");
 
     lua_pushcfunction(L, ngx_lua_http_body);
     lua_setfield(L, -2, "body");
@@ -165,6 +173,34 @@ ngx_lua_http_uri(lua_State *L)
     r = ngx_lua_http_request(L);
 
     lua_pushlstring(L, (const char *) r->uri.data, r->uri.len);
+
+    return 1;
+}
+
+
+static int
+ngx_lua_http_method(lua_State *L)
+{
+    ngx_http_request_t  *r;
+
+    r = ngx_lua_http_request(L);
+
+    lua_pushlstring(L, (const char *) r->method_name.data, r->method_name.len);
+
+    return 1;
+}
+
+
+static int
+ngx_lua_http_client_ip(lua_State *L)
+{
+    ngx_connection_t    *c;
+    ngx_http_request_t  *r;
+
+    r = ngx_lua_http_request(L);
+    c = r->connection;
+
+    lua_pushlstring(L, (const char *) c->addr_text.data, c->addr_text.len);
 
     return 1;
 }

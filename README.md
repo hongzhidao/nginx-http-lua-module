@@ -30,6 +30,8 @@ nginx object
 request object
 ====
 - ``r.uri``
+- ``r.method``
+- ``r.client_ip``
 - ``r.body``
 - ``r.echo(text)``
 - ``r.exit(status)``
