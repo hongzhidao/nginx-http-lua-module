@@ -22,7 +22,7 @@ typedef struct {
     int             status;
 } ngx_lua_t;
 
-ngx_lua_t *ngx_lua_create(ngx_conf_t *cf);
+ngx_lua_t *ngx_lua_create(ngx_pool_t *pool);
 ngx_lua_t *ngx_lua_clone(ngx_pool_t *pool, ngx_lua_t *from);
 ngx_int_t ngx_lua_call(ngx_lua_t *lua, int narg);
 

@@ -14,12 +14,12 @@ static void ngx_lua_state_cleanup(void *data);
 static void ngx_lua_thread_cleanup(void *data);
 
 ngx_lua_t *
-ngx_lua_create(ngx_conf_t *cf)
+ngx_lua_create(ngx_pool_t *pool)
 {
     ngx_lua_t           *lua;
     ngx_pool_cleanup_t  *cln;
 
-    lua = ngx_pcalloc(cf->pool, sizeof(ngx_lua_t));
+    lua = ngx_pcalloc(pool, sizeof(ngx_lua_t));
     if (lua == NULL) {
         return NULL;
     }
@@ -31,7 +31,7 @@ ngx_lua_create(ngx_conf_t *cf)
 
     luaL_openlibs(lua->state);
 
-    cln = ngx_pool_cleanup_add(cf->pool, 0);
+    cln = ngx_pool_cleanup_add(pool, 0);
     if (cln == NULL) {
         lua_close(lua->state);
         return NULL;

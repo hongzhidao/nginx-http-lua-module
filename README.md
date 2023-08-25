@@ -19,6 +19,11 @@ Directives
 
 - ``lua_script`` (http|server|location)
 
+nginx object
+====
+- ``ngx.json_encode(val)``
+- ``ngx.json_decode(str)``
+
 request object
 ====
 - ``r.uri``
@@ -43,11 +48,7 @@ http {
         }
 
         location /hello {
-            lua_script  "r.echo('hello lua')";
-        }
-
-        location /status {
-            lua_script  "r.echo(r.uri)";
+            lua_script  "r.echo('hello ' .. r.uri)";
         }
     }
 }
@@ -55,4 +56,4 @@ http {
 
 Community
 =========
-Author: Zhidao HONG<hongzhidao@gmail.com>
+Author: Zhidao HONG <hongzhidao@gmail.com>

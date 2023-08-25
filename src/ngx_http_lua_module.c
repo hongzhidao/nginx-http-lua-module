@@ -3,6 +3,7 @@
  * Copyright (C) Zhidao HONG
  */
 
+#include <ngx_lua_core.h>
 #include <ngx_lua_http.h>
 
 typedef struct {
@@ -175,10 +176,12 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
         return NULL;
     }
 
-    lua = ngx_lua_create(cf);
+    lua = ngx_lua_create(cf->pool);
     if (lua == NULL) {
         return NULL;
     }
+
+    ngx_lua_core_register(lua->state);
 
     lmcf->lua = lua;
     lmcf->request_ref = ngx_lua_http_object_ref(lua->state);
