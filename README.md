@@ -17,12 +17,14 @@ Configuring nginx with the module.
 Directives
 ==========
 
-- ``lua_script`` (http|server|location)
+- ``lua_script``
+- ``lua_shared_dict_zone``
 
 nginx object
 ====
 - ``ngx.json_encode(val)``
 - ``ngx.json_decode(str)``
+- ``ngx.shared``
 
 request object
 ====
@@ -40,6 +42,8 @@ nginx.conf
 events {}
 
 http {
+    lua_shared_dict_zone  zone=config:1M;
+
     server {
         listen 8000;
 
@@ -50,8 +54,38 @@ http {
         location /hello {
             lua_script  "r.echo('hello ' .. r.uri)";
         }
+
+        location /test {
+            lua_script  "require('http').test(r)";
+        }
     }
 }
+```
+
+http.lua
+```
+local _M = {};
+
+local str = [[
+{
+    "num": [1, 2, 3]
+}
+]];
+
+function _M.test(r)
+    local config = ngx.shared.config;
+
+    config:set('data', str);
+    local data = config:get('data');
+
+    local val = ngx.json_decode(data);
+    local text = ngx.json_encode(val);
+
+    r.echo(text);
+    r.exit(200);
+end
+
+return _M;
 ```
 
 Community

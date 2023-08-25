@@ -7,20 +7,19 @@
 #include <ngx_lua_http.h>
 
 typedef struct {
-    ngx_lua_t       *lua;
-    int             request_ref;
-} ngx_http_lua_main_conf_t;
-
-typedef struct {
     int             lua_ref;
 } ngx_http_lua_loc_conf_t;
 
+static ngx_int_t ngx_http_lua_dict_init_zone(ngx_shm_zone_t *shm_zone,
+    void *data);
 static ngx_int_t ngx_http_lua_init(ngx_conf_t *cf);
 static void *ngx_http_lua_create_main_conf(ngx_conf_t *cf);
 static void *ngx_http_lua_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_lua_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
 static char *ngx_http_lua_script(ngx_conf_t *cf, ngx_command_t *cmd,
+    void *conf);
+static char *ngx_http_lua_dict_zone(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
 
 
@@ -30,6 +29,13 @@ static ngx_command_t  ngx_http_lua_commands[] = {
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_http_lua_script,
       NGX_HTTP_LOC_CONF_OFFSET,
+      0,
+      NULL },
+
+    { ngx_string("lua_shared_dict_zone"),
+      NGX_HTTP_MAIN_CONF|NGX_CONF_1MORE,
+      ngx_http_lua_dict_zone,
+      0,
       0,
       NULL },
 
@@ -186,6 +192,11 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
     lmcf->lua = lua;
     lmcf->request_ref = ngx_lua_http_object_ref(lua->state);
 
+    lmcf->dicts = ngx_array_create(cf->pool, 4, sizeof(ngx_lua_dict_t));
+    if (lmcf->dicts == NULL) {
+        return NULL;
+    }
+
     return lmcf;
 }
 
@@ -283,6 +294,144 @@ ngx_http_lua_script(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     llcf->lua_ref = luaL_ref(lua->state, LUA_REGISTRYINDEX);
 
     return NGX_CONF_OK;
+}
+
+
+static char *
+ngx_http_lua_dict_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_http_lua_main_conf_t  *lmcf = conf;
+
+    u_char          *p;
+    ssize_t         size;
+    ngx_str_t       *value, name, s;
+    ngx_uint_t      i;
+    ngx_lua_dict_t  *dict;
+    ngx_shm_zone_t  *shm_zone;
+
+    size = 0;
+    name.len = 0;
+
+    value = cf->args->elts;
+
+    for (i = 1; i < cf->args->nelts; i++) {
+
+        if (ngx_strncmp(value[i].data, "zone=", 5) == 0) {
+            name.data = value[i].data + 5;
+
+            p = (u_char *) ngx_strchr(name.data, ':');
+
+            if (p == NULL) {
+                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                                   "invalid zone size \"%V\"", &value[i]);
+                return NGX_CONF_ERROR;
+            }
+
+            name.len = p - name.data;
+
+            if (name.len == 0) {
+                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                                   "invalid zone name \"%V\"", &value[i]);
+                return NGX_CONF_ERROR;
+            }
+
+            s.data = p + 1;
+            s.len = value[i].data + value[i].len - s.data;
+
+            size = ngx_parse_size(&s);
+
+            if (size == NGX_ERROR) {
+                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                                   "invalid zone size \"%V\"", &value[i]);
+                return NGX_CONF_ERROR;
+            }
+
+            if (size < (ssize_t) (8 * ngx_pagesize)) {
+                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                                   "zone \"%V\" is too small", &value[i]);
+                return NGX_CONF_ERROR;
+            }
+
+            continue;
+        }
+    }
+
+    if (name.len == 0) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "\"%V\" must have \"zone\" parameter", &cmd->name);
+        return NGX_CONF_ERROR;
+    }
+
+    shm_zone = ngx_shared_memory_add(cf, &name, size, &ngx_http_lua_module);
+    if (shm_zone == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    if (shm_zone->data) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "duplicate zone \"%V\"",
+                           &name);
+        return NGX_CONF_ERROR;
+    }
+
+    dict = ngx_array_push(lmcf->dicts);
+    if (dict == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    dict->shm_zone = shm_zone;
+
+    shm_zone->init = ngx_http_lua_dict_init_zone;
+    shm_zone->data = dict;
+
+    return NGX_CONF_OK;
+}
+
+
+static ngx_int_t
+ngx_http_lua_dict_init_zone(ngx_shm_zone_t *shm_zone, void *data)
+{
+    ngx_lua_dict_t  *prev = data;
+
+    size_t          len;
+    ngx_lua_dict_t  *dict;
+
+    dict = shm_zone->data;
+
+    if (prev) {
+        dict->sh = prev->sh;
+        dict->shpool = prev->shpool;
+
+        return NGX_OK;
+    }
+
+    dict->shpool = (ngx_slab_pool_t *) shm_zone->shm.addr;
+
+    if (shm_zone->shm.exists) {
+        dict->sh = dict->shpool->data;
+        return NGX_OK;
+    }
+
+    dict->sh = ngx_slab_calloc(dict->shpool, sizeof(ngx_lua_dict_sh_t));
+    if (dict->sh == NULL) {
+        return NGX_ERROR;
+    }
+
+    dict->shpool->data = dict->sh;
+
+    ngx_rbtree_init(&dict->sh->rbtree, &dict->sh->sentinel,
+                    ngx_str_rbtree_insert_value);
+
+    len = sizeof(" in lua shared dict zone \"\"") + shm_zone->shm.name.len;
+
+    dict->shpool->log_ctx = ngx_slab_alloc(dict->shpool, len);
+    if (dict->shpool->log_ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_sprintf(dict->shpool->log_ctx, " in lua shared zone \"%V\"%Z",
+                &shm_zone->shm.name);
+
+    return NGX_OK;
 }
 
 
