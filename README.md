@@ -18,6 +18,7 @@ Directives
 ==========
 
 - ``lua_script``
+- ``lua_timer``
 - ``lua_shared_dict_zone``
 
 nginx object
@@ -57,6 +58,10 @@ http {
 
         location /test {
             lua_script  "require('http').test(r)";
+        }
+
+        location /timer {
+            lua_timer  "print('timer test')";
         }
     }
 }

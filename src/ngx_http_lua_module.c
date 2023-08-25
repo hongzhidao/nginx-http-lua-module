@@ -10,6 +10,16 @@ typedef struct {
     int             lua_ref;
 } ngx_http_lua_loc_conf_t;
 
+typedef struct {
+    int             ref;
+    ngx_msec_t      interval;
+    ngx_event_t     event;
+    ngx_pool_t      *pool;
+    ngx_log_t       *log;
+} ngx_lua_timer_t;
+
+static ngx_int_t ngx_http_lua_init_process(ngx_cycle_t *cycle);
+static void ngx_lua_timer_handler(ngx_event_t *ev);
 static ngx_int_t ngx_http_lua_dict_init_zone(ngx_shm_zone_t *shm_zone,
     void *data);
 static ngx_int_t ngx_http_lua_init(ngx_conf_t *cf);
@@ -19,6 +29,7 @@ static char *ngx_http_lua_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
 static char *ngx_http_lua_script(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
+static char *ngx_http_lua_timer(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_lua_dict_zone(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
 
@@ -29,6 +40,13 @@ static ngx_command_t  ngx_http_lua_commands[] = {
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_http_lua_script,
       NGX_HTTP_LOC_CONF_OFFSET,
+      0,
+      NULL },
+
+    { ngx_string("lua_timer"),
+      NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
+      ngx_http_lua_timer,
+      0,
       0,
       NULL },
 
@@ -65,13 +83,47 @@ ngx_module_t  ngx_http_lua_module = {
     NGX_HTTP_MODULE,               /* module type */
     NULL,                          /* init master */
     NULL,                          /* init module */
-    NULL,                          /* init process */
+    ngx_http_lua_init_process,     /* init process */
     NULL,                          /* init thread */
     NULL,                          /* exit thread */
     NULL,                          /* exit process */
     NULL,                          /* exit master */
     NGX_MODULE_V1_PADDING
 };
+
+
+static ngx_int_t
+ngx_http_lua_init_process(ngx_cycle_t *cycle)
+{
+    ngx_uint_t                i;
+    ngx_lua_timer_t           *timer;
+    ngx_http_lua_main_conf_t  *lmcf;
+
+    if (ngx_process != NGX_PROCESS_WORKER) {
+        return NGX_OK;
+    }
+
+    lmcf = ngx_http_cycle_get_module_main_conf(cycle, ngx_http_lua_module);
+    if (lmcf == NULL) {
+        return NGX_OK;
+    }
+
+    timer = lmcf->timers->elts;
+
+    for (i = 0; i < lmcf->timers->nelts; i++) {
+        timer->log = ngx_cycle->log;
+        timer->event.log = timer->log;
+        timer->event.handler = ngx_lua_timer_handler;
+        timer->event.data = timer;
+        timer->event.cancelable = 1;
+
+        ngx_add_timer(&timer->event, 1);
+
+        timer++;
+    }
+
+    return NGX_OK;
+}
 
 
 static void
@@ -139,6 +191,52 @@ fail:
 }
 
 
+static void
+ngx_lua_timer_handler(ngx_event_t *ev)
+{
+    ngx_int_t                 ret;
+    ngx_lua_t                 *lua;
+    ngx_lua_timer_t           *timer;
+    ngx_http_lua_main_conf_t  *lmcf;
+
+    lmcf = ngx_http_cycle_get_module_main_conf(ngx_cycle, ngx_http_lua_module);
+
+    timer = ev->data;
+
+    ngx_log_debug(NGX_LOG_DEBUG_HTTP, timer->log, 0, "lua timer handler");
+
+    timer->pool = ngx_create_pool(4096, timer->log);
+    if (timer->pool == NULL) {
+        goto clean;
+    }
+
+    lua = ngx_lua_clone(timer->pool, lmcf->lua);
+    if (lua == NULL) {
+        goto clean;
+    }
+
+    lua->log = timer->log;
+
+    lua_rawgeti(lua->state, LUA_REGISTRYINDEX, timer->ref);
+
+    ret = ngx_lua_call(lua, 0);
+    if (ret == NGX_ERROR) {
+        ngx_log_error(NGX_LOG_ERR, timer->log, 0, "timer handler failed");
+    }
+
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, timer->log, 0,
+                   "lua timer call: ret: %i", ret);
+
+clean:
+
+    if (timer->pool != NULL) {
+        ngx_destroy_pool(timer->pool);
+    }
+
+    ngx_add_timer(&timer->event, timer->interval);
+}
+
+
 static ngx_int_t
 ngx_http_lua_handler(ngx_http_request_t *r)
 {
@@ -194,6 +292,11 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
 
     lmcf->dicts = ngx_array_create(cf->pool, 4, sizeof(ngx_lua_dict_t));
     if (lmcf->dicts == NULL) {
+        return NULL;
+    }
+
+    lmcf->timers = ngx_array_create(cf->pool, 4, sizeof(ngx_lua_timer_t));
+    if (lmcf->timers == NULL) {
         return NULL;
     }
 
@@ -292,6 +395,66 @@ ngx_http_lua_script(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     llcf->lua_ref = luaL_ref(lua->state, LUA_REGISTRYINDEX);
+
+    return NGX_CONF_OK;
+}
+
+
+static char *
+ngx_http_lua_timer(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_int_t                 ret;
+    ngx_lua_t                 *lua;
+    ngx_str_t                 *value, s;
+    ngx_msec_t                interval;
+    ngx_uint_t                i;
+    ngx_lua_timer_t           *timer;
+    ngx_http_lua_main_conf_t  *lmcf;
+
+    lmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_lua_module);
+    lua = lmcf->lua;
+
+    value = cf->args->elts;
+
+    interval = 5000;
+
+    for (i = 2; i < cf->args->nelts; i++) {
+
+        if (ngx_strncmp(value[i].data, "interval=", 9) == 0) {
+            s.len = value[i].len - 9;
+            s.data = value[i].data + 9;
+
+            interval = ngx_parse_time(&s, 0);
+
+            if (interval == (ngx_msec_t) NGX_ERROR || interval == 0) {
+                goto invalid;
+            }
+
+            continue;
+        }
+
+invalid:
+
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "invalid parameter \"%V\"", &value[i]);
+        return NGX_CONF_ERROR;
+    }
+
+    ret = luaL_loadbuffer(lua->state, (const char *) value[1].data,
+                          value[1].len, NULL);
+    if (ret != LUA_OK) {
+        ngx_log_error(NGX_LOG_ERR, cf->log, 0, "luaL_loadbuffer() failed: %s",
+                      lua_tostring(lua->state, -1));
+        return NGX_CONF_ERROR;
+    }
+
+    timer = ngx_array_push(lmcf->timers);
+    if (timer == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    timer->interval = interval;
+    timer->ref = luaL_ref(lua->state, LUA_REGISTRYINDEX);
 
     return NGX_CONF_OK;
 }
