@@ -33,6 +33,8 @@ request object
 - ``r.method``
 - ``r.client_ip``
 - ``r.body``
+- ``r.args``
+- ``r.headers``
 - ``r.echo(text)``
 - ``r.exit(status)``
 
@@ -50,20 +52,16 @@ http {
     server {
         listen 8000;
 
-        location / {
-            lua_script  "r.exit(206)";
-        }
-
         location /hello {
-            lua_script  "r.echo('hello ' .. r.uri)";
+            lua_script  "r.echo('hello');r.exit(200)";
         }
 
-        location /test {
-            lua_script  "require('http').test(r)";
+        location /foo {
+            lua_script  "require('http').foo(r)";
         }
 
         location /timer {
-            lua_timer  "print('timer test')";
+            lua_timer  "require('http').timer(r)";
         }
     }
 }
@@ -73,23 +71,28 @@ http.lua
 ```
 local _M = {};
 
-local str = [[
-{
-    "num": [1, 2, 3]
-}
-]];
-
-function _M.test(r)
+function _M.foo(r)
     local config = ngx.shared.config;
 
-    config:set('data', str);
-    local data = config:get('data');
+    local val = {
+        uri = r.uri,
+        method = r.method,
+        client_ip = r.client_ip,
+        foo = r.args['foo'],
+        baz = r.headers['baz'],
+    };
 
-    local val = ngx.json_decode(data);
     local text = ngx.json_encode(val);
 
+    config:set('data', text);
+
     r.echo(text);
-    r.exit(200);
+end
+
+function _M.timer(r)
+    local config = ngx.shared.config;
+    local data = config:get('data');
+    print(data);
 end
 
 return _M;

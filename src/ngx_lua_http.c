@@ -12,6 +12,8 @@ static int ngx_lua_http_uri(lua_State *L);
 static int ngx_lua_http_method(lua_State *L);
 static int ngx_lua_http_client_ip(lua_State *L);
 static int ngx_lua_http_body(lua_State *L);
+static int ngx_lua_http_arg(lua_State *L);
+static int ngx_lua_http_header(lua_State *L);
 
 
 int
@@ -39,6 +41,29 @@ ngx_lua_http_object_ref(lua_State *L)
 
     lua_pushcfunction(L, ngx_lua_http_exit);
     lua_setfield(L, -2, "exit");
+
+    /* args { */
+    lua_newtable(L);
+
+    lua_newtable(L);
+    lua_pushcfunction(L, ngx_lua_http_arg);
+    lua_setfield(L, -2, "__index");
+    lua_setmetatable(L, -2);
+
+    lua_setfield(L, -2, "args");
+    /* } args */
+
+    /* headers { */
+    lua_newtable(L);
+
+    lua_newtable(L);
+    lua_pushcfunction(L, ngx_lua_http_header);
+    lua_setfield(L, -2, "__index");
+    lua_setmetatable(L, -2);
+
+    lua_setfield(L, -2, "headers");
+    /* } headers */
+
     /* } http methods */
 
     /* http prototype { */
@@ -235,6 +260,137 @@ ngx_lua_http_body(lua_State *L)
     }
 
     luaL_pushresult(&b);
+
+    return 1;
+}
+
+
+static int
+ngx_lua_http_arg(lua_State *L)
+{
+    ngx_int_t           ret;
+    ngx_str_t           name, value;
+    ngx_http_request_t  *r;
+
+    r = ngx_lua_http_request(L);
+
+    name.data = (u_char *) luaL_checklstring(L, 2, &name.len);
+
+    if (name.len == 0) {
+        return 0;
+    }
+
+    ret = ngx_http_arg(r, name.data, name.len, &value);
+    if (ret != NGX_OK) {
+        return 0;
+    }
+
+    lua_pushlstring(L, (const char *) value.data, value.len);
+
+    return 1;
+}
+
+
+static ngx_int_t
+ngx_lua_http_unknown_header(ngx_http_request_t *r, ngx_str_t *name,
+    ngx_str_t *value)
+{
+    u_char           *p;
+    size_t           len;
+    ngx_uint_t       i;
+    ngx_list_part_t  *part;
+    ngx_table_elt_t  *header, *h, **ph;
+
+    part = &r->headers_in.headers.part;
+
+    ph = &h;
+#if (NGX_SUPPRESS_WARN)
+    len = 0;
+#endif
+
+    header = part->elts;
+
+    for (i = 0; /* void */ ; i++) {
+
+        if (i >= part->nelts) {
+            if (part->next == NULL) {
+                break;
+            }
+
+            part = part->next;
+            header = part->elts;
+            i = 0;
+        }
+
+        if (header[i].hash == 0
+            || name->len != header[i].key.len
+            || ngx_strncasecmp(name->data, header[i].key.data, name->len)
+               != 0)
+        {
+            continue;
+        }
+
+        len += header[i].value.len + 2;
+
+        *ph = &header[i];
+        ph = &header[i].next;
+    }
+
+    *ph = NULL;
+
+    if (h == NULL) {
+        return NGX_DECLINED;
+    }
+
+    len -= 2;
+
+    if (h->next == NULL) {
+        value->len = h->value.len;
+        value->data = h->value.data;
+        return NGX_OK;
+    }
+
+    p = ngx_pnalloc(r->pool, len);
+    if (p == NULL) {
+        return NGX_ERROR;
+    }
+
+    value->len = len;
+    value->data = p;
+
+    for ( ;; ) {
+        p = ngx_copy(p, h->value.data, h->value.len);
+
+        if (h->next == NULL) {
+            break;
+        }
+
+        *p++ = ','; *p++ = ' ';
+
+        h = h->next;
+    }
+
+    return NGX_OK;
+}
+
+
+static int
+ngx_lua_http_header(lua_State *L)
+{
+    ngx_int_t           ret;
+    ngx_str_t           name, value;
+    ngx_http_request_t  *r;
+
+    r = ngx_lua_http_request(L);
+
+    name.data = (u_char *) luaL_checklstring(L, 2, &name.len);
+
+    ret = ngx_lua_http_unknown_header(r, &name, &value);
+    if (ret != NGX_OK) {
+        return 0;
+    }
+
+    lua_pushlstring(L, (const char *) value.data, value.len);
 
     return 1;
 }
