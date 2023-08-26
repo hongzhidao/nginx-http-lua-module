@@ -37,6 +37,7 @@ request object
 - ``r.headers``
 - ``r.echo(text)``
 - ``r.exit(status)``
+- ``r.set_header(name, value)``
 
 
 Example
@@ -86,6 +87,7 @@ function _M.foo(r)
 
     config:set('data', text);
 
+    r.set_header("Content-type", "application/json");
     r.echo(text);
 end
 
