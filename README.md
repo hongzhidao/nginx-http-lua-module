@@ -35,6 +35,7 @@ request object
 - ``r.body``
 - ``r.args``
 - ``r.headers``
+- ``r.vars``
 - ``r.echo(text)``
 - ``r.exit(status)``
 - ``r.set_header(name, value)``
@@ -51,6 +52,12 @@ http {
     lua_shared_dict_zone  zone=config:1M;
 
     server {
+        listen  8081;
+        listen  8082;
+        return  200 $server_port;
+    }
+
+    server {
         listen 8000;
 
         location /hello {
@@ -59,6 +66,12 @@ http {
 
         location /foo {
             lua_script  "require('http').foo(r)";
+        }
+
+        location /proxy {
+            set  $backend '127.0.0.1:8081';
+            lua_script  "r.vars.backend = '127.0.0.1:8082';
+            proxy_pass  http://$backend;
         }
 
         location /timer {

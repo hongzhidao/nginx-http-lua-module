@@ -15,6 +15,7 @@ static int ngx_lua_http_client_ip(lua_State *L);
 static int ngx_lua_http_body(lua_State *L);
 static int ngx_lua_http_arg(lua_State *L);
 static int ngx_lua_http_header(lua_State *L);
+static int ngx_lua_http_var(lua_State *L);
 static ngx_table_elt_t *ngx_lua_http_find_header(ngx_http_request_t *r,
     ngx_list_t *headers, ngx_str_t *name);
 
@@ -69,6 +70,19 @@ ngx_lua_http_object_ref(lua_State *L)
 
     lua_setfield(L, -2, "headers");
     /* } headers */
+
+    /* vars { */
+    lua_newtable(L);
+
+    lua_newtable(L);
+    lua_pushcfunction(L, ngx_lua_http_var);
+    lua_setfield(L, -2, "__index");
+    lua_pushcfunction(L, ngx_lua_http_var);
+    lua_setfield(L, -2, "__newindex");
+    lua_setmetatable(L, -2);
+
+    lua_setfield(L, -2, "vars");
+    /* } vars */
 
     /* } http methods */
 
@@ -404,4 +418,85 @@ ngx_lua_http_find_header(ngx_http_request_t *r, ngx_list_t *headers,
     }
 
     return NULL;
+}
+
+
+static int
+ngx_lua_http_var(lua_State *L)
+{
+    int                        n;
+    ngx_str_t                  name, value;
+    ngx_uint_t                 key;
+    ngx_http_request_t         *r;
+    ngx_http_variable_t        *v;
+    ngx_http_variable_value_t  *vv;
+    ngx_http_core_main_conf_t  *cmcf;
+
+    r = ngx_lua_http_request(L);
+    n = lua_gettop(L);
+
+    name.data = (u_char *) luaL_checklstring(L, 2, &name.len);
+    key = ngx_hash_strlow(name.data, name.data, name.len);
+
+    if (n == 2) {
+        vv = ngx_http_get_variable(r, &name, key);
+        if (vv == NULL || vv->not_found) {
+            return 0;
+        }
+
+        lua_pushlstring(L, (const char *) vv->data, vv->len);
+        return 1;
+    }
+
+    value.data = (u_char *) luaL_checklstring(L, 3, &value.len);
+
+    cmcf = ngx_http_get_module_main_conf(r, ngx_http_core_module);
+
+    v = ngx_hash_find(&cmcf->variables_hash, key, name.data, name.len);
+    if (v == NULL) {
+        luaL_error(L, "variable not found");
+        return 0;
+    }
+
+    if (v->set_handler != NULL) {
+        vv = ngx_pcalloc(r->pool, sizeof(ngx_http_variable_value_t));
+        if (vv == NULL) {
+            goto fail;
+        }
+
+        vv->valid = 1;
+        vv->not_found = 0;
+        vv->data = value.data;
+        vv->len = value.len;
+
+        v->set_handler(r, vv, v->data);
+
+        return 0;
+    }
+
+    if (!(v->flags & NGX_HTTP_VAR_INDEXED)) {
+        luaL_error(L, "variable is not writable");
+        return 0;
+    }
+
+    vv = &r->variables[v->index];
+
+    vv->valid = 1;
+    vv->not_found = 0;
+
+    vv->data = ngx_pnalloc(r->pool, value.len);
+    if (vv->data == NULL) {
+        goto fail;
+    }
+
+    vv->len = value.len;
+    ngx_memcpy(vv->data, value.data, vv->len);
+
+    return 0;
+
+fail:
+
+    luaL_error(L, "variable set failed");
+
+    return 0;
 }
