@@ -150,7 +150,7 @@ ngx_lua_http_index(lua_State *L)
 
     name.data = (u_char *) luaL_checklstring(L, 2, &name.len);
 
-    lua_getfield(L, 1, "proto");
+    lua_getfield(L, 1, "prop");
     lua_getfield(L, -1, (const char *) name.data);
 
     if (!lua_isfunction(L, -1)) {
