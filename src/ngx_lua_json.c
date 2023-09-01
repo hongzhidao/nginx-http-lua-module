@@ -839,23 +839,21 @@ lua_json_array_parse(lua_State *L, lua_json_parser_t *json)
         return -1;
     }
 
-    if (json->token.val == ']') {
-        return 0;
-    }
+    if (json->token.val != ']') {
+        for (i = 1; ; i++) {
+            if (lua_json_value_parse(L, json)) {
+                return -1;
+            }
 
-    for (i = 1; ; i++) {
-        if (lua_json_value_parse(L, json)) {
-            return -1;
-        }
+            lua_rawseti(L, -2, i);
 
-        lua_rawseti(L, -2, i);
+            if (json->token.val != ',') {
+                break;
+            }
 
-        if (json->token.val != ',') {
-            break;
-        }
-
-        if (lua_json_next_token(L, json)) {
-            return -1;
+            if (lua_json_next_token(L, json)) {
+                return -1;
+            }
         }
     }
 
@@ -872,38 +870,36 @@ lua_json_object_parse(lua_State *L, lua_json_parser_t *json)
         return -1;
     }
 
-    if (json->token.val == '}') {
-        return 0;
-    }
+    if (json->token.val != '}') {
+        for (;;) {
+            if (json->token.val != LUA_TOKEN_STRING) {
+                return lua_json_parse_error(L, json, "invalid property name");
+            }
 
-    for (;;) {
-        if (json->token.val != LUA_TOKEN_STRING) {
-            return lua_json_parse_error(L, json, "invalid property name");
-        }
+            lua_pushlstring(L, (const char *) json->token.u.string.data,
+                            json->token.u.string.len);
 
-        lua_pushlstring(L, (const char *) json->token.u.string.data,
-                        json->token.u.string.len);
+            if (lua_json_next_token(L, json)) {
+                return -1;
+            }
 
-        if (lua_json_next_token(L, json)) {
-            return -1;
-        }
+            if (lua_json_expect(L, json, ':')) {
+                return -1;
+            }
 
-        if (lua_json_expect(L, json, ':')) {
-            return -1;
-        }
+            if (lua_json_value_parse(L, json)) {
+                return -1;
+            }
 
-        if (lua_json_value_parse(L, json)) {
-            return -1;
-        }
+            lua_rawset(L, -3);
 
-        lua_rawset(L, -3);
+            if (json->token.val != ',') {
+                break;
+            }
 
-        if (json->token.val != ',') {
-            break;
-        }
-
-        if (lua_json_next_token(L, json)) {
-            return -1;
+            if (lua_json_next_token(L, json)) {
+                return -1;
+            }
         }
     }
 
