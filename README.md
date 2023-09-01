@@ -23,9 +23,10 @@ Directives
 
 nginx object
 ====
+- ``ngx.shared``
 - ``ngx.json_encode(val)``
 - ``ngx.json_decode(str)``
-- ``ngx.shared``
+- ``ngx.cidr_parse(addr)``
 
 request object
 ====
@@ -39,6 +40,7 @@ request object
 - ``r.echo(text)``
 - ``r.exit(status)``
 - ``r.set_header(name, value)``
+- ``r.match_cidr(cidr)``
 
 
 Example
@@ -52,26 +54,14 @@ http {
     lua_shared_dict_zone  zone=config:1M;
 
     server {
-        listen  8081;
-        listen  8082;
-        return  200 $server_port;
-    }
-
-    server {
         listen 8000;
 
         location /hello {
             lua_script  "r.echo('hello');r.exit(200)";
         }
 
-        location /foo {
-            lua_script  "require('http').foo(r)";
-        }
-
-        location /proxy {
-            set  $backend '127.0.0.1:8081';
-            lua_script  "r.vars.backend = '127.0.0.1:8082';
-            proxy_pass  http://$backend;
+        location /dump {
+            lua_script  "require('http').dump(r)";
         }
 
         location /timer {
@@ -85,9 +75,7 @@ http.lua
 ```
 local _M = {};
 
-function _M.foo(r)
-    local config = ngx.shared.config;
-
+function _M.dump(r)
     local val = {
         uri = r.uri,
         method = r.method,
@@ -98,16 +86,17 @@ function _M.foo(r)
 
     local text = ngx.json_encode(val);
 
-    config:set('data', text);
-
     r.set_header("Content-type", "application/json");
     r.echo(text);
 end
 
 function _M.timer(r)
     local config = ngx.shared.config;
-    local data = config:get('data');
-    print(data);
+
+    config:set('version', '0.1.0');
+    local version = config:get('version');
+
+    print(version);
 end
 
 return _M;
