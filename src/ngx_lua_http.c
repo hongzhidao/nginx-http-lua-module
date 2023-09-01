@@ -3,6 +3,7 @@
  * Copyright (C) Zhidao HONG
  */
 
+#include <ngx_lua_core.h>
 #include <ngx_lua_http.h>
 
 static int ngx_lua_http_index(lua_State *L);
@@ -16,6 +17,7 @@ static int ngx_lua_http_var(lua_State *L);
 static int ngx_lua_http_echo(lua_State *L);
 static int ngx_lua_http_exit(lua_State *L);
 static int ngx_lua_http_set_header(lua_State *L);
+static int ngx_lua_http_match_cidr(lua_State *L);
 
 
 /*
@@ -92,6 +94,9 @@ ngx_lua_http_object_ref(lua_State *L)
 
     lua_pushcfunction(L, ngx_lua_http_set_header);
     lua_setfield(L, -2, "set_header");
+
+    lua_pushcfunction(L, ngx_lua_http_match_cidr);
+    lua_setfield(L, -2, "match_cidr");
 
     /* r.prop { */
     lua_newtable(L);
@@ -507,4 +512,25 @@ ngx_lua_http_set_header(lua_State *L)
 fail:
 
     return luaL_error(L, "set header failed.");
+}
+
+
+static int
+ngx_lua_http_match_cidr(lua_State *L)
+{
+    int                 matched;
+    ngx_cidr_t          *cidr;
+    struct sockaddr     *sockaddr;
+    ngx_http_request_t  *r;
+
+    r = ngx_lua_http_request(L);
+    sockaddr = r->connection->sockaddr;
+
+    cidr = lua_touserdata(L, 1);
+
+    matched = ngx_lua_cidr_match(cidr, sockaddr);
+
+    lua_pushboolean(L, matched);
+
+    return 1;
 }

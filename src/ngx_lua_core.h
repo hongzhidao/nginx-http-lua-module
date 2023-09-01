@@ -28,5 +28,7 @@ typedef struct {
 void ngx_lua_core_register(lua_State *L);
 void ngx_lua_json_register(lua_State *L);
 void ngx_lua_dict_register(lua_State *L);
+void ngx_lua_cidr_register(lua_State *L);
+int ngx_lua_cidr_match(ngx_cidr_t *cidr, struct sockaddr *sockaddr);
 
 #endif /* NGX_LUA_CORE_H */
