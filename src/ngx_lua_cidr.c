@@ -16,11 +16,8 @@ lua_cidr_parse(lua_State *L)
     addr.data = (u_char *) luaL_checklstring(L, 1, &addr.len);
 
     ret = ngx_ptocidr(&addr, &cidr);
-
     if (ret == NGX_ERROR) {
-        lua_pushnil(L);
-        lua_pushstring(L, "invalid cidr");
-        return 2;
+        return 0;
     }
 
     pcidr = lua_newuserdata(L, sizeof(ngx_cidr_t));
