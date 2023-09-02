@@ -168,8 +168,8 @@ ngx_lua_http_index(lua_State *L)
         return 1;
     }
 
-    lua_pushvalue(L, -3);
-    lua_call(L, 1, 1);
+    lua_pushvalue(L, 3);
+    lua_call(L, 1, 0);
 
     return 0;
 }
@@ -178,13 +178,31 @@ ngx_lua_http_index(lua_State *L)
 static int
 ngx_lua_http_uri(lua_State *L)
 {
+    int                 n;
+    ngx_str_t           str, uri;
     ngx_http_request_t  *r;
 
     r = ngx_lua_http_request(L);
+    n = lua_gettop(L);
 
-    lua_pushlstring(L, (const char *) r->uri.data, r->uri.len);
+    if (n == 0) {
+        lua_pushlstring(L, (const char *) r->uri.data, r->uri.len);
+        return 1;
+    }
 
-    return 1;
+    str.data = (u_char *) luaL_checklstring(L, 1, &str.len);
+
+    uri.len = str.len;
+    uri.data = ngx_pstrdup(r->pool, &str);
+
+    if (uri.data == NULL) {
+        luaL_error(L, "uri set failed");
+        return 0;
+    }
+
+    r->uri = uri;
+
+    return 0;
 }
 
 
