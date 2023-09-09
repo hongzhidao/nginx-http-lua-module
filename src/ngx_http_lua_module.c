@@ -171,9 +171,13 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
             cv.value.len = ngx_buf_size(lua->buf);
         }
 
-        ret = ngx_http_send_response(r, lua->status, NULL, &cv);
-        if (ret == NGX_ERROR) {
-            goto fail;
+        ret = lua->status;
+
+        if (ret < NGX_HTTP_BAD_REQUEST) {
+            ret = ngx_http_send_response(r, lua->status, NULL, &cv);
+            if (ret == NGX_ERROR) {
+                goto fail;
+            }
         }
 
         ngx_http_finalize_request(r, ret);

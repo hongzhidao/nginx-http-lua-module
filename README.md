@@ -26,6 +26,8 @@ nginx object
 - ``ngx.shared``
 - ``ngx.json_encode(val)``
 - ``ngx.json_decode(str)``
+- ``ngx.base64_encode(str)``
+- ``ngx.base64_decode(str)``
 - ``ngx.cidr_parse(addr)``
 
 request object
