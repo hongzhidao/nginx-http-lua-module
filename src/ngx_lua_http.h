@@ -16,6 +16,11 @@ typedef struct {
     ngx_array_t     *timers;  /* of ngx_lua_timer_t */
 } ngx_http_lua_main_conf_t;
 
+typedef struct {
+    ngx_uint_t      status;
+    ngx_buf_t       *buf;
+} ngx_http_lua_ctx_t;
+
 int ngx_lua_http_request_object(lua_State *L);
 
 extern ngx_module_t  ngx_http_lua_module;

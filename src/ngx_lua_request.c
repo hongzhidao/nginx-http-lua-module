@@ -437,11 +437,11 @@ ngx_lua_request_echo(lua_State *L)
 {
     ngx_buf_t           *b;
     ngx_str_t           str;
-    ngx_lua_t           *lua;
     ngx_http_request_t  *r;
+    ngx_http_lua_ctx_t  *ctx;
 
-    lua = ngx_lua_ext_get(L);
     r = ngx_lua_http_request(L);
+    ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
 
     str.data = (u_char *) luaL_checklstring(L, 1, &str.len);
 
@@ -452,7 +452,7 @@ ngx_lua_request_echo(lua_State *L)
 
     b->last = ngx_cpymem(b->last, str.data, str.len);
 
-    lua->buf = b;
+    ctx->buf = b;
 
     return 0;
 }
@@ -461,10 +461,12 @@ ngx_lua_request_echo(lua_State *L)
 static int
 ngx_lua_request_exit(lua_State *L)
 {
-    int        status;
-    ngx_lua_t  *lua;
+    int                 status;
+    ngx_http_lua_ctx_t  *ctx;
+    ngx_http_request_t  *r;
 
-    lua = ngx_lua_ext_get(L);
+    r = ngx_lua_http_request(L);
+    ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
 
     status = luaL_checkinteger(L, 1);
 
@@ -472,7 +474,7 @@ ngx_lua_request_exit(lua_State *L)
         return luaL_error(L, "code is out of range");
     }
 
-    lua->status = status;
+    ctx->status = status;
 
     lua_yield(L, 0);
 

@@ -18,8 +18,6 @@ typedef struct {
     void            *data;
     ngx_pool_t      *pool;
     ngx_log_t       *log;
-    ngx_buf_t       *buf;
-    int             status;
 } ngx_lua_t;
 
 ngx_lua_t *ngx_lua_create(ngx_pool_t *pool);
