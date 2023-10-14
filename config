@@ -16,7 +16,7 @@ ngx_module_srcs="$ngx_addon_dir/src/ngx_chb.c \
                  $ngx_addon_dir/src/ngx_lua_json.c \
                  $ngx_addon_dir/src/ngx_lua_dict.c \
                  $ngx_addon_dir/src/ngx_lua_cidr.c \
-                 $ngx_addon_dir/src/ngx_lua_http.c \
+                 $ngx_addon_dir/src/ngx_lua_request.c \
                  $ngx_addon_dir/src/ngx_http_lua_module.c"
 
 . auto/module

@@ -292,7 +292,7 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
     ngx_lua_core_register(lua->state);
 
     lmcf->lua = lua;
-    lmcf->request_ref = ngx_lua_http_object_ref(lua->state);
+    lmcf->request_ref = ngx_lua_http_request_object(lua->state);
 
     lmcf->dicts = ngx_array_create(cf->pool, 4, sizeof(ngx_lua_dict_t));
     if (lmcf->dicts == NULL) {

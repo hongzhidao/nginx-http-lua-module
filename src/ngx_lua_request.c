@@ -6,18 +6,18 @@
 #include <ngx_lua_core.h>
 #include <ngx_lua_http.h>
 
-static int ngx_lua_http_index(lua_State *L);
-static int ngx_lua_http_uri(lua_State *L);
-static int ngx_lua_http_method(lua_State *L);
-static int ngx_lua_http_client_ip(lua_State *L);
-static int ngx_lua_http_body(lua_State *L);
-static int ngx_lua_http_arg(lua_State *L);
-static int ngx_lua_http_header(lua_State *L);
-static int ngx_lua_http_var(lua_State *L);
-static int ngx_lua_http_echo(lua_State *L);
-static int ngx_lua_http_exit(lua_State *L);
-static int ngx_lua_http_set_header(lua_State *L);
-static int ngx_lua_http_match_cidr(lua_State *L);
+static int ngx_lua_request_index(lua_State *L);
+static int ngx_lua_request_uri(lua_State *L);
+static int ngx_lua_request_method(lua_State *L);
+static int ngx_lua_request_client_ip(lua_State *L);
+static int ngx_lua_request_body(lua_State *L);
+static int ngx_lua_request_arg(lua_State *L);
+static int ngx_lua_request_header(lua_State *L);
+static int ngx_lua_request_var(lua_State *L);
+static int ngx_lua_request_echo(lua_State *L);
+static int ngx_lua_request_exit(lua_State *L);
+static int ngx_lua_request_set_header(lua_State *L);
+static int ngx_lua_request_match_cidr(lua_State *L);
 
 
 /*
@@ -47,7 +47,7 @@ static int ngx_lua_http_match_cidr(lua_State *L);
  * setmetatable(r, r.prop);
  */
 int
-ngx_lua_http_object_ref(lua_State *L)
+ngx_lua_http_request_object(lua_State *L)
 {
     lua_newtable(L);
 
@@ -55,7 +55,7 @@ ngx_lua_http_object_ref(lua_State *L)
     lua_newtable(L);
 
     lua_newtable(L);
-    lua_pushcfunction(L, ngx_lua_http_arg);
+    lua_pushcfunction(L, ngx_lua_request_arg);
     lua_setfield(L, -2, "__index");
     lua_setmetatable(L, -2);
 
@@ -66,7 +66,7 @@ ngx_lua_http_object_ref(lua_State *L)
     lua_newtable(L);
 
     lua_newtable(L);
-    lua_pushcfunction(L, ngx_lua_http_header);
+    lua_pushcfunction(L, ngx_lua_request_header);
     lua_setfield(L, -2, "__index");
     lua_setmetatable(L, -2);
 
@@ -77,48 +77,48 @@ ngx_lua_http_object_ref(lua_State *L)
     lua_newtable(L);
 
     lua_newtable(L);
-    lua_pushcfunction(L, ngx_lua_http_var);
+    lua_pushcfunction(L, ngx_lua_request_var);
     lua_setfield(L, -2, "__index");
-    lua_pushcfunction(L, ngx_lua_http_var);
+    lua_pushcfunction(L, ngx_lua_request_var);
     lua_setfield(L, -2, "__newindex");
     lua_setmetatable(L, -2);
 
     lua_setfield(L, -2, "vars");
     /* } r.vars */
 
-    lua_pushcfunction(L, ngx_lua_http_echo);
+    lua_pushcfunction(L, ngx_lua_request_echo);
     lua_setfield(L, -2, "echo");
 
-    lua_pushcfunction(L, ngx_lua_http_exit);
+    lua_pushcfunction(L, ngx_lua_request_exit);
     lua_setfield(L, -2, "exit");
 
-    lua_pushcfunction(L, ngx_lua_http_set_header);
+    lua_pushcfunction(L, ngx_lua_request_set_header);
     lua_setfield(L, -2, "set_header");
 
-    lua_pushcfunction(L, ngx_lua_http_match_cidr);
+    lua_pushcfunction(L, ngx_lua_request_match_cidr);
     lua_setfield(L, -2, "match_cidr");
 
     /* r.prop { */
     lua_newtable(L);
 
-    lua_pushcfunction(L, ngx_lua_http_uri);
+    lua_pushcfunction(L, ngx_lua_request_uri);
     lua_setfield(L, -2, "uri");
 
-    lua_pushcfunction(L, ngx_lua_http_method);
+    lua_pushcfunction(L, ngx_lua_request_method);
     lua_setfield(L, -2, "method");
 
-    lua_pushcfunction(L, ngx_lua_http_client_ip);
+    lua_pushcfunction(L, ngx_lua_request_client_ip);
     lua_setfield(L, -2, "client_ip");
 
-    lua_pushcfunction(L, ngx_lua_http_body);
+    lua_pushcfunction(L, ngx_lua_request_body);
     lua_setfield(L, -2, "body");
 
     /* r.prop.__index */
-    lua_pushcfunction(L, ngx_lua_http_index);
+    lua_pushcfunction(L, ngx_lua_request_index);
     lua_setfield(L, -2, "__index");
 
     /* r.prop.__newindex */
-    lua_pushcfunction(L, ngx_lua_http_index);
+    lua_pushcfunction(L, ngx_lua_request_index);
     lua_setfield(L, -2, "__newindex");
 
     lua_setfield(L, -2, "prop");
@@ -146,7 +146,7 @@ ngx_lua_http_request(lua_State *L)
 
 
 static int
-ngx_lua_http_index(lua_State *L)
+ngx_lua_request_index(lua_State *L)
 {
     int        n;
     ngx_str_t  name;
@@ -176,7 +176,7 @@ ngx_lua_http_index(lua_State *L)
 
 
 static int
-ngx_lua_http_uri(lua_State *L)
+ngx_lua_request_uri(lua_State *L)
 {
     int                 n;
     ngx_str_t           str, uri;
@@ -207,7 +207,7 @@ ngx_lua_http_uri(lua_State *L)
 
 
 static int
-ngx_lua_http_method(lua_State *L)
+ngx_lua_request_method(lua_State *L)
 {
     ngx_http_request_t  *r;
 
@@ -220,7 +220,7 @@ ngx_lua_http_method(lua_State *L)
 
 
 static int
-ngx_lua_http_client_ip(lua_State *L)
+ngx_lua_request_client_ip(lua_State *L)
 {
     ngx_connection_t    *c;
     ngx_http_request_t  *r;
@@ -235,7 +235,7 @@ ngx_lua_http_client_ip(lua_State *L)
 
 
 static int
-ngx_lua_http_body(lua_State *L)
+ngx_lua_request_body(lua_State *L)
 {
     ngx_buf_t           *buf;
     ngx_chain_t         *cl;
@@ -269,7 +269,7 @@ ngx_lua_http_body(lua_State *L)
 
 
 static int
-ngx_lua_http_arg(lua_State *L)
+ngx_lua_request_arg(lua_State *L)
 {
     ngx_int_t           ret;
     ngx_str_t           name, value;
@@ -330,7 +330,7 @@ ngx_lua_http_find_header(ngx_http_request_t *r, ngx_list_t *headers,
 
 
 static int
-ngx_lua_http_header(lua_State *L)
+ngx_lua_request_header(lua_State *L)
 {
     ngx_str_t           name;
     ngx_table_elt_t     *h;
@@ -352,7 +352,7 @@ ngx_lua_http_header(lua_State *L)
 
 
 static int
-ngx_lua_http_var(lua_State *L)
+ngx_lua_request_var(lua_State *L)
 {
     int                        n;
     ngx_str_t                  name, value;
@@ -433,7 +433,7 @@ fail:
 
 
 static int
-ngx_lua_http_echo(lua_State *L)
+ngx_lua_request_echo(lua_State *L)
 {
     ngx_buf_t           *b;
     ngx_str_t           str;
@@ -459,7 +459,7 @@ ngx_lua_http_echo(lua_State *L)
 
 
 static int
-ngx_lua_http_exit(lua_State *L)
+ngx_lua_request_exit(lua_State *L)
 {
     int        status;
     ngx_lua_t  *lua;
@@ -481,7 +481,7 @@ ngx_lua_http_exit(lua_State *L)
 
 
 static int
-ngx_lua_http_set_header(lua_State *L)
+ngx_lua_request_set_header(lua_State *L)
 {
     u_char              *p;
     ngx_str_t           name, value;
@@ -534,7 +534,7 @@ fail:
 
 
 static int
-ngx_lua_http_match_cidr(lua_State *L)
+ngx_lua_request_match_cidr(lua_State *L)
 {
     int                 matched;
     ngx_cidr_t          *cidr;
