@@ -21,6 +21,7 @@ typedef struct {
     ngx_buf_t       *buf;
 } ngx_http_lua_ctx_t;
 
+void ngx_lua_request_metatable(lua_State *L);
 int ngx_lua_http_request_object(lua_State *L);
 
 extern ngx_module_t  ngx_http_lua_module;

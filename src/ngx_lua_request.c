@@ -20,32 +20,33 @@ static int ngx_lua_request_set_header(lua_State *L);
 static int ngx_lua_request_match_cidr(lua_State *L);
 
 
-/*
- * r = {};
- * r.args = {
- *     __index = function() end
- * };
- * r.headers = {
- *     __index = function() end
- * };
- * r.vars = {
- *     __index = function() end,
- *     __newindex = function() end
- * };
- * r.exit();
- * r.echo();
- * r.set_header();
- * r.prop = {};
- * r.prop.uri;
- * r.prop.method;
- * r.prop.body;
- * r.prop.client_ip;
- * r.prop.__index = function(name)
- *     r.prop[name]();
- * end
- * r.__index = r;
- * setmetatable(r, r.prop);
- */
+void
+ngx_lua_request_metatable(lua_State *L)
+{
+    luaL_newmetatable(L, "lua_request_metatable");
+
+    lua_pushcfunction(L, ngx_lua_request_uri);
+    lua_setfield(L, -2, "uri");
+
+    lua_pushcfunction(L, ngx_lua_request_method);
+    lua_setfield(L, -2, "method");
+
+    lua_pushcfunction(L, ngx_lua_request_client_ip);
+    lua_setfield(L, -2, "client_ip");
+
+    lua_pushcfunction(L, ngx_lua_request_body);
+    lua_setfield(L, -2, "body");
+
+    lua_pushcfunction(L, ngx_lua_request_index);
+    lua_setfield(L, -2, "__index");
+
+    lua_pushcfunction(L, ngx_lua_request_index);
+    lua_setfield(L, -2, "__newindex");
+
+    lua_pop(L, 1);
+}
+
+
 int
 ngx_lua_http_request_object(lua_State *L)
 {
@@ -98,37 +99,7 @@ ngx_lua_http_request_object(lua_State *L)
     lua_pushcfunction(L, ngx_lua_request_match_cidr);
     lua_setfield(L, -2, "match_cidr");
 
-    /* r.prop { */
-    lua_newtable(L);
-
-    lua_pushcfunction(L, ngx_lua_request_uri);
-    lua_setfield(L, -2, "uri");
-
-    lua_pushcfunction(L, ngx_lua_request_method);
-    lua_setfield(L, -2, "method");
-
-    lua_pushcfunction(L, ngx_lua_request_client_ip);
-    lua_setfield(L, -2, "client_ip");
-
-    lua_pushcfunction(L, ngx_lua_request_body);
-    lua_setfield(L, -2, "body");
-
-    /* r.prop.__index */
-    lua_pushcfunction(L, ngx_lua_request_index);
-    lua_setfield(L, -2, "__index");
-
-    /* r.prop.__newindex */
-    lua_pushcfunction(L, ngx_lua_request_index);
-    lua_setfield(L, -2, "__newindex");
-
-    lua_setfield(L, -2, "prop");
-    /* } r.prop */
-
-    lua_pushvalue(L, -1);
-    lua_setfield(L, -2, "__index");
-
-    lua_getfield(L, -1, "prop");
-    lua_setmetatable(L, -2);
+    luaL_setmetatable(L, "lua_request_metatable");
 
     return luaL_ref(L, LUA_REGISTRYINDEX);
 }
@@ -155,7 +126,8 @@ ngx_lua_request_index(lua_State *L)
 
     name.data = (u_char *) luaL_checklstring(L, 2, &name.len);
 
-    lua_getfield(L, 1, "prop");
+    luaL_getmetatable(L, "lua_request_metatable");
+
     lua_getfield(L, -1, (const char *) name.data);
 
     if (!lua_isfunction(L, -1)) {

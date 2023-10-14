@@ -298,6 +298,9 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
 
     ngx_lua_core_register(lua->state);
 
+    /* lua http register */
+    ngx_lua_request_metatable(lua->state);
+
     lmcf->lua = lua;
     lmcf->request_ref = ngx_lua_http_request_object(lua->state);
 
