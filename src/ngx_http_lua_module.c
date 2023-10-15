@@ -296,7 +296,7 @@ ngx_http_lua_create_main_conf(ngx_conf_t *cf)
         return NULL;
     }
 
-    ngx_lua_core_register(lua->state);
+    ngx_lua_nginx_register(lua->state);
 
     /* lua http register */
     ngx_lua_request_metatable(lua->state);

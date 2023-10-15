@@ -9,7 +9,7 @@ static void ngx_lua_base64_register(lua_State *L);
 
 
 void
-ngx_lua_core_register(lua_State *L)
+ngx_lua_nginx_register(lua_State *L)
 {
     lua_newtable(L);
 
