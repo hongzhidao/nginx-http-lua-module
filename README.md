@@ -37,12 +37,21 @@ request object
 - ``r.client_ip``
 - ``r.body``
 - ``r.args``
-- ``r.headers``
 - ``r.vars``
+- ``r.headers``
+- ``r.resp``
 - ``r.echo(text)``
 - ``r.exit(status)``
-- ``r.set_header(name, value)``
 - ``r.match_cidr(cidr)``
+
+headers object
+====
+- ``headers.get(name)``
+- ``headers.set(name, value)``
+
+response object
+====
+- ``resp.headers``
 
 
 Example
@@ -78,17 +87,20 @@ http.lua
 local _M = {};
 
 function _M.dump(r)
+    local headers = r.headers;
     local val = {
         uri = r.uri,
         method = r.method,
         client_ip = r.client_ip,
         foo = r.args['foo'],
-        baz = r.headers['baz'],
+        baz = headers:get('baz'),
     };
 
     local text = ngx.json_encode(val);
 
-    r.set_header("Content-type", "application/json");
+    local headers = r.resp.headers;
+    headers:set("Content-type", "application/json");
+
     r.echo(text);
 end
 
