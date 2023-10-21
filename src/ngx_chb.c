@@ -5,12 +5,7 @@
 
 #include <ngx_chb.h>
 
-static inline size_t ngx_chb_size(ngx_chb_t *b);
-static void ngx_chb_join_write(ngx_chb_t *b, u_char *dst);
-
-#define NGX_CHB_MIN_SIZE      1024
-#define ngx_chb_node_free(n)  (size_t) ((n)->end - (n)->pos)
-#define ngx_chb_node_used(n)  (size_t) ((n)->pos - (n)->start)
+#define NGX_CHB_MIN_SIZE  1024
 
 
 u_char *
@@ -128,25 +123,7 @@ ngx_chb_join(ngx_chb_t *b, ngx_str_t *str)
 }
 
 
-static inline size_t
-ngx_chb_size(ngx_chb_t *b)
-{
-    size_t          size;
-    ngx_chb_node_t  *node;
-
-    size = 0;
-    node = b->nodes;
-
-    while (node != NULL) {
-        size += ngx_chb_node_used(node);
-        node = node->next;
-    }
-
-    return size;
-}
-
-
-static void
+void
 ngx_chb_join_write(ngx_chb_t *b, u_char *dst)
 {
     size_t          size;
@@ -159,4 +136,33 @@ ngx_chb_join_write(ngx_chb_t *b, u_char *dst)
         dst = ngx_cpymem(dst, node->start, size);
         node = node->next;
     }
+}
+
+
+static void
+ngx_chb_vsprintf(ngx_chb_t *chain, size_t size, const char *fmt, va_list args)
+{
+    u_char  *start, *end;
+
+    start = ngx_chb_reserve(chain, size);
+    if (start == NULL) {
+        return;
+    }
+
+    end = ngx_vslprintf(start, start + size, fmt, args);
+
+    ngx_chb_advance(chain, end);
+}
+
+
+void
+ngx_chb_sprintf(ngx_chb_t *chain, size_t size, const char* fmt, ...)
+{
+    va_list  args;
+
+    va_start(args, fmt);
+
+    ngx_chb_vsprintf(chain, size, fmt, args);
+
+    va_end(args);
 }
