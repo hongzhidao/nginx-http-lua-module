@@ -4,6 +4,7 @@
  */
 
 #include <ngx_lua.h>
+#include <ngx_event.h>
 
 static void ngx_lua_state_cleanup(void *data);
 
@@ -83,17 +84,47 @@ ngx_lua_free(ngx_lua_t *from, ngx_lua_t *lua)
 
 
 ngx_int_t
-ngx_lua_call(ngx_lua_t *lua, int narg)
+ngx_lua_call(ngx_lua_t *lua, int nargs, ngx_event_t *wake)
 {
     int  status, nresults;
 
-    status = lua_resume(lua->state, NULL, narg, &nresults);
+    if (lua->wake != NULL) {
+        nargs = lua->nresults;
+    }
 
-    if (status != LUA_OK && status != LUA_YIELD) {
+    status = lua_resume(lua->state, NULL, nargs, &nresults);
+
+    switch (status) {
+
+    case LUA_YIELD:
+        lua->wake = wake;
+        return NGX_AGAIN;
+
+    case LUA_OK:
+        lua->wake = NULL;
+        return NGX_OK;
+
+    default:
         ngx_log_error(NGX_LOG_ERR, lua->log, 0, "lua exception: %s",
                       lua_tostring(lua->state, -1));
         return NGX_ERROR;
     }
 
     return NGX_OK;
+}
+
+
+int
+ngx_lua_yield(ngx_lua_t *lua)
+{
+    return lua_yield(lua->state, 0);
+}
+
+
+void
+ngx_lua_wake(ngx_lua_t *lua, int nresults)
+{
+    lua->nresults = nresults;
+
+    ngx_post_event(lua->wake, &ngx_posted_events);
 }

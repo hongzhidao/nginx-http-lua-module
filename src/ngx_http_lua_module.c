@@ -177,8 +177,8 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, llcf->lua_ref);
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, lmcf->request_ref);
 
-    ret = ngx_lua_call(lua, 1);
-    if (ret != NGX_OK) {
+    ret = ngx_lua_call(lua, 1, r->connection->write);
+    if (ret == NGX_ERROR) {
         goto fail;
     }
 
@@ -305,7 +305,7 @@ ngx_lua_timer_handler(ngx_event_t *ev)
         goto clean;
     }
 
-    ret = ngx_lua_call(lua, 1);
+    ret = ngx_lua_call(lua, 1, &timer->event);
     if (ret == NGX_ERROR) {
         ngx_log_error(NGX_LOG_ERR, timer->log, 0, "timer handler failed");
     }

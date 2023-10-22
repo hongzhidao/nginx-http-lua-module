@@ -18,12 +18,16 @@ typedef struct {
     void            *data;
     ngx_pool_t      *pool;
     ngx_log_t       *log;
+    ngx_event_t     *wake;
+    int             nresults;
 } ngx_lua_t;
 
 ngx_lua_t *ngx_lua_create(ngx_pool_t *pool);
 ngx_lua_t *ngx_lua_clone(ngx_lua_t *from);
 void ngx_lua_free(ngx_lua_t *from, ngx_lua_t *lua);
-ngx_int_t ngx_lua_call(ngx_lua_t *lua, int narg);
+ngx_int_t ngx_lua_call(ngx_lua_t *lua, int nargs, ngx_event_t *wake);
+int ngx_lua_yield(ngx_lua_t *lua);
+void ngx_lua_wake(ngx_lua_t *lua, int nresults);
 
 #define ngx_lua_ext_set(L, ext)                                     \
     *((void **) lua_getextraspace(L)) = ext;
