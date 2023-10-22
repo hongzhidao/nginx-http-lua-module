@@ -6,6 +6,7 @@
 #include <ngx_lua_core.h>
 
 static int ngx_lua_conf_index(lua_State *L);
+static int ngx_lua_conf_data(lua_State *L);
 static int ngx_lua_conf_free(lua_State *L);
 
 
@@ -17,10 +18,50 @@ ngx_lua_conf_metatable(lua_State *L)
     lua_pushcfunction(L, ngx_lua_conf_index);
     lua_setfield(L, -2, "__index");
 
+    lua_pushcfunction(L, ngx_lua_conf_data);
+    lua_setfield(L, -2, "data");
+
     lua_pushcfunction(L, ngx_lua_conf_free);
     lua_setfield(L, -2, "__gc");
 
     lua_pop(L, 1);
+}
+
+
+ngx_lua_conf_t *
+ngx_lua_conf_new(lua_State *L, ngx_pool_t *pool)
+{
+    ngx_lua_conf_t  *conf;
+
+    conf = lua_newuserdata(L, sizeof(ngx_lua_conf_t));
+    if (conf == NULL) {
+        return NULL;
+    }
+
+    conf->pool = pool;
+
+    lua_newtable(L);
+    conf->data = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    luaL_getmetatable(L, "lua_conf_metatable");
+    lua_setmetatable(L, -2);
+
+    return conf;
+}
+
+
+static int
+ngx_lua_conf_free(lua_State *L)
+{
+    ngx_lua_conf_t  *conf;
+
+    conf = lua_touserdata(L, 1);
+
+    luaL_unref(L, LUA_REGISTRYINDEX, conf->data);
+
+    ngx_destroy_pool(conf->pool);
+
+    return 0;
 }
 
 
@@ -49,15 +90,15 @@ ngx_lua_conf_index(lua_State *L)
 
 
 static int
-ngx_lua_conf_free(lua_State *L)
+ngx_lua_conf_data(lua_State *L)
 {
     ngx_lua_conf_t  *conf;
 
     conf = lua_touserdata(L, 1);
 
-    ngx_destroy_pool(conf->pool);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, conf->data);
 
-    return 0;
+    return 1;
 }
 
 

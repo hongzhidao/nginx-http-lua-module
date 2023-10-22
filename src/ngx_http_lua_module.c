@@ -240,15 +240,10 @@ ngx_lua_timer_handler(ngx_event_t *ev)
 
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, timer->ref);
 
-    conf = lua_newuserdata(lua->state, sizeof(ngx_lua_conf_t));
+    conf = ngx_lua_conf_new(lua->state, pool);
     if (conf == NULL) {
         goto clean;
     }
-
-    conf->pool = pool;
-
-    luaL_getmetatable(lua->state, "lua_conf_metatable");
-    lua_setmetatable(lua->state, -2);
 
     ret = ngx_lua_call(lua, 1);
     if (ret == NGX_ERROR) {

@@ -9,6 +9,8 @@ ngx_module_deps="$lua/src/liblua.a \
                  $ngx_addon_dir/src/ngx_chb.h \
                  $ngx_addon_dir/src/ngx_lua.h \
                  $ngx_addon_dir/src/ngx_lua_core.h \
+                 $ngx_addon_dir/src/ngx_lua_conf.h \
+                 $ngx_addon_dir/src/ngx_lua_dict.h \
                  $ngx_addon_dir/src/ngx_lua_http.h"
 ngx_module_srcs="$ngx_addon_dir/src/ngx_chb.c \
                  $ngx_addon_dir/src/ngx_lua.c \

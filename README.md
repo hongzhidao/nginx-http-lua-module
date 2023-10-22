@@ -53,6 +53,10 @@ response object
 ====
 - ``resp.headers``
 
+conf object
+====
+- ``conf.data``
+
 
 Example
 =======
@@ -71,12 +75,12 @@ http {
             lua_script  "r.echo('hello');r.exit(200)";
         }
 
-        location /dump {
-            lua_script  "require('http').dump(r)";
+        location /timer {
+            lua_timer  "require('http').timer(conf)";
         }
 
-        location /timer {
-            lua_timer  "require('http').timer(r)";
+        location /test {
+            lua_script  "require('http').test(r)";
         }
     }
 }
@@ -85,6 +89,15 @@ http {
 http.lua
 ```
 local _M = {};
+
+function _M.timer(conf)
+    local config = ngx.shared.config;
+
+    config:set('version', '0.1.0');
+    local version = config:get('version');
+
+    print(version);
+end
 
 function _M.dump(r)
     local headers = r.headers;
@@ -102,15 +115,6 @@ function _M.dump(r)
     headers:set("Content-type", "application/json");
 
     r.echo(text);
-end
-
-function _M.timer(r)
-    local config = ngx.shared.config;
-
-    config:set('version', '0.1.0');
-    local version = config:get('version');
-
-    print(version);
 end
 
 return _M;
