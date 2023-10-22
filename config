@@ -13,6 +13,7 @@ ngx_module_deps="$lua/src/liblua.a \
 ngx_module_srcs="$ngx_addon_dir/src/ngx_chb.c \
                  $ngx_addon_dir/src/ngx_lua.c \
                  $ngx_addon_dir/src/ngx_lua_nginx.c \
+                 $ngx_addon_dir/src/ngx_lua_conf.c \
                  $ngx_addon_dir/src/ngx_lua_json.c \
                  $ngx_addon_dir/src/ngx_lua_dict.c \
                  $ngx_addon_dir/src/ngx_lua_cidr.c \

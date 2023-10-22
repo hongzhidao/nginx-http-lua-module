@@ -13,6 +13,7 @@ ngx_lua_nginx_register(lua_State *L)
 {
     lua_newtable(L);
 
+    ngx_lua_conf_register(L);
     ngx_lua_json_register(L);
     ngx_lua_dict_register(L);
     ngx_lua_cidr_register(L);

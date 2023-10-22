@@ -19,7 +19,6 @@ typedef struct {
     int             ref;
     ngx_msec_t      interval;
     ngx_event_t     event;
-    ngx_pool_t      *pool;
     ngx_log_t       *log;
 } ngx_lua_timer_t;
 
@@ -215,6 +214,8 @@ ngx_lua_timer_handler(ngx_event_t *ev)
 {
     ngx_int_t                 ret;
     ngx_lua_t                 *lua;
+    ngx_pool_t                *pool;
+    ngx_lua_conf_t            *conf;
     ngx_lua_timer_t           *timer;
     ngx_http_lua_main_conf_t  *lmcf;
 
@@ -224,8 +225,8 @@ ngx_lua_timer_handler(ngx_event_t *ev)
 
     ngx_log_debug(NGX_LOG_DEBUG_HTTP, timer->log, 0, "lua timer handler");
 
-    timer->pool = ngx_create_pool(4096, timer->log);
-    if (timer->pool == NULL) {
+    pool = ngx_create_pool(4096, timer->log);
+    if (pool == NULL) {
         goto clean;
     }
 
@@ -234,11 +235,20 @@ ngx_lua_timer_handler(ngx_event_t *ev)
         goto clean;
     }
 
-    lua->pool = timer->pool;
+    lua->pool = pool;
     lua->log = timer->log;
 
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, timer->ref);
-    lua_pushnil(lua->state);
+
+    conf = lua_newuserdata(lua->state, sizeof(ngx_lua_conf_t));
+    if (conf == NULL) {
+        goto clean;
+    }
+
+    conf->pool = pool;
+
+    luaL_getmetatable(lua->state, "lua_conf_metatable");
+    lua_setmetatable(lua->state, -2);
 
     ret = ngx_lua_call(lua, 1);
     if (ret == NGX_ERROR) {
@@ -250,11 +260,10 @@ ngx_lua_timer_handler(ngx_event_t *ev)
 
     ngx_lua_free(lmcf->lua, lua);
 
-clean:
+    /* TODO */
+    lua_gc(lmcf->lua->state, LUA_GCCOLLECT, 0);
 
-    if (timer->pool != NULL) {
-        ngx_destroy_pool(timer->pool);
-    }
+clean:
 
     ngx_add_timer(&timer->event, timer->interval);
 }
