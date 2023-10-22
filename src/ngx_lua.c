@@ -5,13 +5,7 @@
 
 #include <ngx_lua.h>
 
-typedef struct {
-    ngx_lua_t       *lua;
-    ngx_lua_t       *from;
-} ngx_lua_cleanup_t;
-
 static void ngx_lua_state_cleanup(void *data);
-static void ngx_lua_thread_cleanup(void *data);
 
 ngx_lua_t *
 ngx_lua_create(ngx_pool_t *pool)
@@ -54,50 +48,37 @@ ngx_lua_state_cleanup(void *data)
 
 
 ngx_lua_t *
-ngx_lua_clone(ngx_pool_t *pool, ngx_lua_t *from)
+ngx_lua_clone(ngx_lua_t *from)
 {
-    ngx_lua_t           *lua;
-    ngx_lua_cleanup_t   *lcln;
-    ngx_pool_cleanup_t  *cln;
+    ngx_lua_t  *lua;
+    lua_State  *coro;
 
-    lua = ngx_pcalloc(pool, sizeof(ngx_lua_t));
+    coro = lua_newthread(from->state);
+    if (coro == NULL) {
+        return NULL;
+    }
+
+    lua = lua_newuserdata(coro, sizeof(ngx_lua_t));
     if (lua == NULL) {
         return NULL;
     }
 
-    lua->pool = pool;
+    ngx_memzero(lua, sizeof(ngx_lua_t));
 
-    lua->state = lua_newthread(from->state);
-    if (lua->state == NULL) {
-        return NULL;
-    }
+    lua->state = coro;
 
     lua->ref = luaL_ref(from->state, LUA_REGISTRYINDEX);
 
     ngx_lua_ext_set(lua->state, lua);
 
-    cln = ngx_pool_cleanup_add(pool, sizeof(ngx_lua_cleanup_t));
-    if (cln == NULL) {
-        luaL_unref(from->state, LUA_REGISTRYINDEX, lua->ref);
-        return NULL;
-    }
-
-    cln->handler = ngx_lua_thread_cleanup;
-
-    lcln = cln->data;
-    lcln->from = from;
-    lcln->lua = lua;
-
     return lua;
 }
 
 
-static void
-ngx_lua_thread_cleanup(void *data)
+void
+ngx_lua_free(ngx_lua_t *from, ngx_lua_t *lua)
 {
-    ngx_lua_cleanup_t  *lcln = data;
-
-    luaL_unref(lcln->from->state, LUA_REGISTRYINDEX, lcln->lua->ref);
+    luaL_unref(from->state, LUA_REGISTRYINDEX, lua->ref);
 }
 
 

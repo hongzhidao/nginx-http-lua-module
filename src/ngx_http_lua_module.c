@@ -149,13 +149,14 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
 
     ngx_http_set_ctx(r, ctx, ngx_http_lua_module);
 
-    lua = ngx_lua_clone(r->pool, lmcf->lua);
+    lua = ngx_lua_clone(lmcf->lua);
     if (lua == NULL) {
         goto fail;
     }
 
-    lua->data = r;
+    lua->pool = r->pool;
     lua->log = r->connection->log;
+    lua->data = r;
 
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, llcf->lua_ref);
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, lmcf->request_ref);
@@ -164,6 +165,8 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
     if (ret != NGX_OK) {
         goto fail;
     }
+
+    ngx_lua_free(lmcf->lua, lua);
 
     if (ctx->status > 0 || ctx->buf != NULL) {
 
@@ -221,11 +224,12 @@ ngx_lua_timer_handler(ngx_event_t *ev)
         goto clean;
     }
 
-    lua = ngx_lua_clone(timer->pool, lmcf->lua);
+    lua = ngx_lua_clone(lmcf->lua);
     if (lua == NULL) {
         goto clean;
     }
 
+    lua->pool = timer->pool;
     lua->log = timer->log;
 
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, timer->ref);
@@ -237,6 +241,8 @@ ngx_lua_timer_handler(ngx_event_t *ev)
 
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, timer->log, 0,
                    "lua timer call: ret: %i", ret);
+
+    ngx_lua_free(lmcf->lua, lua);
 
 clean:
 
