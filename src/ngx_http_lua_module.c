@@ -11,6 +11,11 @@ typedef struct {
 } ngx_http_lua_loc_conf_t;
 
 typedef struct {
+    ngx_str_t       prefix;
+    ngx_str_t       script;
+} ngx_http_lua_parse_t;
+
+typedef struct {
     int             ref;
     ngx_msec_t      interval;
     ngx_event_t     event;
@@ -233,8 +238,9 @@ ngx_lua_timer_handler(ngx_event_t *ev)
     lua->log = timer->log;
 
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, timer->ref);
+    lua_pushnil(lua->state);
 
-    ret = ngx_lua_call(lua, 0);
+    ret = ngx_lua_call(lua, 1);
     if (ret == NGX_ERROR) {
         ngx_log_error(NGX_LOG_ERR, timer->log, 0, "timer handler failed");
     }
@@ -363,27 +369,26 @@ ngx_http_lua_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 static const char *
 ngx_http_lua_reader(lua_State *L, void *ud, size_t *size)
 {
-    u_char     *buffer;
-    ngx_str_t  *script;
+    u_char                *buffer;
+    ngx_http_lua_parse_t  *parse;
 
-    static const ngx_str_t  prefix = ngx_string("local r = ...;");
+    parse = ud;
 
-    script = ud;
-
-    if (script->len == 0) {
+    if (parse->script.len == 0) {
         return NULL;
     }
 
-    buffer = lua_newuserdata(L, prefix.len + script->len);
+    buffer = lua_newuserdata(L, parse->prefix.len + parse->script.len);
     if (buffer == NULL) {
         return NULL;
     }
 
-    ngx_memcpy(buffer, prefix.data, prefix.len);
-    ngx_memcpy(buffer + prefix.len, script->data, script->len);
+    ngx_memcpy(buffer, parse->prefix.data, parse->prefix.len);
+    ngx_memcpy(buffer + parse->prefix.len, parse->script.data,
+               parse->script.len);
 
-    *size = prefix.len + script->len;
-    script->len = 0;
+    *size = parse->prefix.len + parse->script.len;
+    parse->script.len = 0;
 
     return (const char *) buffer;
 }
@@ -395,8 +400,9 @@ ngx_http_lua_script(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_http_lua_loc_conf_t *llcf = conf;
 
     int                       ret;
-    ngx_str_t                 *value, script;
+    ngx_str_t                 *value;
     ngx_lua_t                 *lua;
+    ngx_http_lua_parse_t      parse;
     ngx_http_lua_main_conf_t  *lmcf;
 
     if (llcf->lua_ref != 0) {
@@ -407,9 +413,11 @@ ngx_http_lua_script(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     lua = lmcf->lua;
 
     value = cf->args->elts;
-    script = value[1];
 
-    ret = lua_load(lua->state, ngx_http_lua_reader, &script, NULL, NULL);
+    parse.script = value[1];
+    ngx_str_set(&parse.prefix, "local r = ...;");
+
+    ret = lua_load(lua->state, ngx_http_lua_reader, &parse, NULL, NULL);
 
     if (ret != LUA_OK) {
         ngx_log_error(NGX_LOG_ERR, cf->log, 0, "lua_load() failed");
@@ -431,6 +439,7 @@ ngx_http_lua_timer(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_msec_t                interval;
     ngx_uint_t                i;
     ngx_lua_timer_t           *timer;
+    ngx_http_lua_parse_t      parse;
     ngx_http_lua_main_conf_t  *lmcf;
 
     lmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_lua_module);
@@ -462,8 +471,11 @@ invalid:
         return NGX_CONF_ERROR;
     }
 
-    ret = luaL_loadbuffer(lua->state, (const char *) value[1].data,
-                          value[1].len, NULL);
+    parse.script = value[1];
+    ngx_str_set(&parse.prefix, "local conf = ...;");
+
+    ret = lua_load(lua->state, ngx_http_lua_reader, &parse, NULL, NULL);
+
     if (ret != LUA_OK) {
         ngx_log_error(NGX_LOG_ERR, cf->log, 0, "luaL_loadbuffer() failed: %s",
                       lua_tostring(lua->state, -1));
