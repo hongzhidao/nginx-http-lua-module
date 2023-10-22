@@ -17,6 +17,7 @@ typedef struct {
 } ngx_http_lua_main_conf_t;
 
 typedef struct {
+    ngx_lua_t       *lua;
     ngx_uint_t      status;
     ngx_buf_t       *buf;
 } ngx_http_lua_ctx_t;

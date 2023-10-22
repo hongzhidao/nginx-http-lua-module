@@ -23,6 +23,7 @@ typedef struct {
 } ngx_lua_timer_t;
 
 static ngx_int_t ngx_http_lua_init_process(ngx_cycle_t *cycle);
+static void ngx_http_lua_cleanup(void *data);
 static void ngx_lua_timer_handler(ngx_event_t *ev);
 static ngx_int_t ngx_http_lua_dict_init_zone(ngx_shm_zone_t *shm_zone,
     void *data);
@@ -135,6 +136,7 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
 {
     ngx_int_t                 ret;
     ngx_lua_t                 *lua;
+    ngx_http_cleanup_t        *cln;
     ngx_http_lua_ctx_t        *ctx;
     ngx_http_lua_loc_conf_t   *llcf;
     ngx_http_lua_main_conf_t  *lmcf;
@@ -162,6 +164,16 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
     lua->log = r->connection->log;
     lua->data = r;
 
+    ctx->lua = lua;
+
+    cln = ngx_http_cleanup_add(r, 0);
+    if (cln == NULL) {
+        goto fail;
+    }
+
+    cln->handler = ngx_http_lua_cleanup;
+    cln->data = r;
+
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, llcf->lua_ref);
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, lmcf->request_ref);
 
@@ -169,8 +181,6 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
     if (ret != NGX_OK) {
         goto fail;
     }
-
-    ngx_lua_free(lmcf->lua, lua);
 
     if (ctx->status > 0 || ctx->buf != NULL) {
 
@@ -206,6 +216,56 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
 fail:
 
     ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+}
+
+
+static void
+ngx_http_lua_cleanup(void *data)
+{
+    ngx_http_request_t *r = data;
+
+    ngx_http_lua_ctx_t        *ctx;
+    ngx_http_lua_main_conf_t  *lmcf;
+
+    lmcf = ngx_http_get_module_main_conf(r, ngx_http_lua_module);
+    ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "http lua cleanup");
+
+    ngx_lua_free(lmcf->lua, ctx->lua);
+}
+
+
+static ngx_int_t
+ngx_http_lua_handler(ngx_http_request_t *r)
+{
+    ngx_int_t                ret;
+    ngx_http_lua_ctx_t       *ctx;
+    ngx_http_lua_loc_conf_t  *llcf;
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "http lua handler");
+
+    llcf = ngx_http_get_module_loc_conf(r, ngx_http_lua_module);
+
+    if (llcf->lua_ref == 0) {
+        return NGX_DECLINED;
+    }
+
+    ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
+    if (ctx != NULL) {
+        return NGX_DECLINED;
+    }
+
+    ret = ngx_http_read_client_request_body(r, ngx_http_lua_body_handler);
+    if (ret >= NGX_HTTP_SPECIAL_RESPONSE) {
+        return ret;
+    }
+
+    ngx_http_finalize_request(r, NGX_DONE);
+
+    return NGX_DONE;
 }
 
 
@@ -261,38 +321,6 @@ ngx_lua_timer_handler(ngx_event_t *ev)
 clean:
 
     ngx_add_timer(&timer->event, timer->interval);
-}
-
-
-static ngx_int_t
-ngx_http_lua_handler(ngx_http_request_t *r)
-{
-    ngx_int_t                ret;
-    ngx_http_lua_ctx_t       *ctx;
-    ngx_http_lua_loc_conf_t  *llcf;
-
-    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                   "http lua handler");
-
-    llcf = ngx_http_get_module_loc_conf(r, ngx_http_lua_module);
-
-    if (llcf->lua_ref == 0) {
-        return NGX_DECLINED;
-    }
-
-    ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
-    if (ctx != NULL) {
-        return NGX_DECLINED;
-    }
-
-    ret = ngx_http_read_client_request_body(r, ngx_http_lua_body_handler);
-    if (ret >= NGX_HTTP_SPECIAL_RESPONSE) {
-        return ret;
-    }
-
-    ngx_http_finalize_request(r, NGX_DONE);
-
-    return NGX_DONE;
 }
 
 

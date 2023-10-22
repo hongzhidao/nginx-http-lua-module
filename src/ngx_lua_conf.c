@@ -57,9 +57,9 @@ ngx_lua_conf_free(lua_State *L)
 
     conf = lua_touserdata(L, 1);
 
-    luaL_unref(L, LUA_REGISTRYINDEX, conf->data);
-
     ngx_destroy_pool(conf->pool);
+
+    luaL_unref(L, LUA_REGISTRYINDEX, conf->data);
 
     return 0;
 }
