@@ -99,7 +99,8 @@ function _M.timer(conf)
     print(version);
 end
 
-function _M.dump(r)
+
+function _M.test(r)
     local headers = r.headers;
     local val = {
         uri = r.uri,
