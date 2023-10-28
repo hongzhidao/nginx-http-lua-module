@@ -162,14 +162,13 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
 
     ngx_http_set_ctx(r, ctx, ngx_http_lua_module);
 
-    lua = ngx_lua_clone(lmcf->lua);
+    lua = ngx_lua_clone(lmcf->lua, r->pool);
     if (lua == NULL) {
         goto fail;
     }
 
-    lua->pool = r->pool;
     lua->log = r->connection->log;
-    lua->data = r;
+    lua->data = ctx;
 
     ctx->lua = lua;
 
@@ -240,18 +239,21 @@ fail:
 static void
 ngx_http_lua_cleanup(void *data)
 {
-    ngx_http_request_t *r = data;
-
+    ngx_lua_t                 *lua;
+    ngx_http_request_t        *r;
     ngx_http_lua_ctx_t        *ctx;
     ngx_http_lua_main_conf_t  *lmcf;
 
+    ctx = data;
+    lua = ctx->lua;
+    r = lua->data;
+
     lmcf = ngx_http_get_module_main_conf(r, ngx_http_lua_module);
-    ctx = ngx_http_get_module_ctx(r, ngx_http_lua_module);
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "http lua cleanup");
 
-    ngx_lua_free(lmcf->lua, ctx->lua);
+    ngx_lua_free(lmcf->lua->state, lua);
 }
 
 
@@ -296,8 +298,6 @@ static void
 ngx_lua_timer_handler(ngx_event_t *ev)
 {
     ngx_int_t                 ret;
-    ngx_lua_t                 *lua;
-    ngx_pool_t                *pool;
     ngx_lua_conf_t            *conf;
     ngx_lua_timer_t           *timer;
     ngx_http_lua_main_conf_t  *lmcf;
@@ -308,27 +308,15 @@ ngx_lua_timer_handler(ngx_event_t *ev)
 
     ngx_log_debug(NGX_LOG_DEBUG_HTTP, timer->log, 0, "lua timer handler");
 
-    pool = ngx_create_pool(4096, timer->log);
-    if (pool == NULL) {
-        goto clean;
-    }
-
-    lua = ngx_lua_clone(lmcf->lua);
-    if (lua == NULL) {
-        goto clean;
-    }
-
-    lua->pool = pool;
-    lua->log = timer->log;
-
-    lua_rawgeti(lua->state, LUA_REGISTRYINDEX, timer->ref);
-
-    conf = ngx_lua_conf_new(lua->state, pool);
+    conf = ngx_lua_conf_new(lmcf->lua, timer->log);
     if (conf == NULL) {
         goto clean;
     }
 
-    ret = ngx_lua_call(lua, 1, &timer->event);
+    lua_rawgeti(conf->lua->state, LUA_REGISTRYINDEX, timer->ref);
+    lua_rawgeti(conf->lua->state, LUA_REGISTRYINDEX, conf->conf_ref);
+
+    ret = ngx_lua_call(conf->lua, 1, &timer->event);
     if (ret == NGX_ERROR) {
         ngx_log_error(NGX_LOG_ERR, timer->log, 0, "timer handler failed");
     }
@@ -336,7 +324,7 @@ ngx_lua_timer_handler(ngx_event_t *ev)
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, timer->log, 0,
                    "lua timer call: ret: %i", ret);
 
-    ngx_lua_free(lmcf->lua, lua);
+    luaL_unref(lmcf->lua->state, LUA_REGISTRYINDEX, conf->conf_ref);
 
     /* TODO */
     lua_gc(lmcf->lua->state, LUA_GCCOLLECT, 0);

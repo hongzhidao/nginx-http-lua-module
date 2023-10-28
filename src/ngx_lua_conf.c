@@ -29,22 +29,36 @@ ngx_lua_conf_metatable(lua_State *L)
 
 
 ngx_lua_conf_t *
-ngx_lua_conf_new(lua_State *L, ngx_pool_t *pool)
+ngx_lua_conf_new(ngx_lua_t *lua, ngx_log_t *log)
 {
+    lua_State       *L;
+    ngx_pool_t      *pool;
     ngx_lua_conf_t  *conf;
+
+    L = lua->state;
 
     conf = lua_newuserdata(L, sizeof(ngx_lua_conf_t));
     if (conf == NULL) {
         return NULL;
     }
 
-    conf->pool = pool;
+    luaL_setmetatable(L, "lua_conf_metatable");
+    conf->conf_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
     lua_newtable(L);
-    conf->data = luaL_ref(L, LUA_REGISTRYINDEX);
+    conf->data_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-    luaL_getmetatable(L, "lua_conf_metatable");
-    lua_setmetatable(L, -2);
+    pool = ngx_create_pool(4096, log);
+    if (pool == NULL) {
+        return NULL;
+    }
+
+    conf->lua = ngx_lua_clone(lua, pool);
+    if (conf->lua == NULL) {
+        return NULL;
+    }
+
+    conf->lua->log = log;
 
     return conf;
 }
@@ -58,8 +72,8 @@ ngx_lua_conf_free(lua_State *L)
     conf = lua_touserdata(L, 1);
 
     ngx_destroy_pool(conf->pool);
-
-    luaL_unref(L, LUA_REGISTRYINDEX, conf->data);
+    luaL_unref(L, LUA_REGISTRYINDEX, conf->data_ref);
+    ngx_lua_free(L, conf->lua);
 
     return 0;
 }
@@ -96,7 +110,7 @@ ngx_lua_conf_data(lua_State *L)
 
     conf = lua_touserdata(L, 1);
 
-    lua_rawgeti(L, LUA_REGISTRYINDEX, conf->data);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, conf->data_ref);
 
     return 1;
 }

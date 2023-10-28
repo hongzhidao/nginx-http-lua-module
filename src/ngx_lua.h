@@ -23,8 +23,8 @@ typedef struct {
 } ngx_lua_t;
 
 ngx_lua_t *ngx_lua_create(ngx_pool_t *pool);
-ngx_lua_t *ngx_lua_clone(ngx_lua_t *from);
-void ngx_lua_free(ngx_lua_t *from, ngx_lua_t *lua);
+ngx_lua_t *ngx_lua_clone(ngx_lua_t *from, ngx_pool_t *pool);
+void ngx_lua_free(lua_State *L, ngx_lua_t *lua);
 ngx_int_t ngx_lua_call(ngx_lua_t *lua, int nargs, ngx_event_t *wake);
 int ngx_lua_yield(ngx_lua_t *lua);
 void ngx_lua_wake(ngx_lua_t *lua, int nresults);

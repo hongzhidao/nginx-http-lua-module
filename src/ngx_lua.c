@@ -49,24 +49,21 @@ ngx_lua_state_cleanup(void *data)
 
 
 ngx_lua_t *
-ngx_lua_clone(ngx_lua_t *from)
+ngx_lua_clone(ngx_lua_t *from, ngx_pool_t *pool)
 {
     ngx_lua_t  *lua;
-    lua_State  *coro;
 
-    coro = lua_newthread(from->state);
-    if (coro == NULL) {
-        return NULL;
-    }
-
-    lua = lua_newuserdata(coro, sizeof(ngx_lua_t));
+    lua = ngx_pcalloc(pool, sizeof(ngx_lua_t));
     if (lua == NULL) {
         return NULL;
     }
 
-    ngx_memzero(lua, sizeof(ngx_lua_t));
+    lua->pool = pool;
 
-    lua->state = coro;
+    lua->state = lua_newthread(from->state);
+    if (lua->state == NULL) {
+        return NULL;
+    }
 
     lua->ref = luaL_ref(from->state, LUA_REGISTRYINDEX);
 
@@ -77,9 +74,9 @@ ngx_lua_clone(ngx_lua_t *from)
 
 
 void
-ngx_lua_free(ngx_lua_t *from, ngx_lua_t *lua)
+ngx_lua_free(lua_State *L, ngx_lua_t *lua)
 {
-    luaL_unref(from->state, LUA_REGISTRYINDEX, lua->ref);
+    luaL_unref(L, LUA_REGISTRYINDEX, lua->ref);
 }
 
 
@@ -109,8 +106,6 @@ ngx_lua_call(ngx_lua_t *lua, int nargs, ngx_event_t *wake)
                       lua_tostring(lua->state, -1));
         return NGX_ERROR;
     }
-
-    return NGX_OK;
 }
 
 
