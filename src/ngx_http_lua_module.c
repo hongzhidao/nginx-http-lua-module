@@ -168,7 +168,7 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
     }
 
     lua->log = r->connection->log;
-    lua->data = ctx;
+    lua->data = r;
 
     ctx->lua = lua;
 
@@ -178,7 +178,7 @@ ngx_http_lua_body_handler(ngx_http_request_t *r)
     }
 
     cln->handler = ngx_http_lua_cleanup;
-    cln->data = r;
+    cln->data = ctx;
 
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, llcf->lua_ref);
     lua_rawgeti(lua->state, LUA_REGISTRYINDEX, lmcf->request_ref);
